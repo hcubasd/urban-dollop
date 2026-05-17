@@ -50,16 +50,25 @@ classDiagram
         +fulfilment_type str
     }
 
+    class SkimMatrix {
+        +data ndarray
+        +n_zones int
+        +get(from_zone_id, to_zone_id) int
+        +from_file(path, zones) SkimMatrix
+    }
+
     FileModel <|-- Zone
     FileModel <|-- Depot
     FileModel <|-- Carrier
 
-    Depot *-- Zone : zone
-    Depot *-- Carrier : carrier
+    Depot "1" *-- "1" Zone : zone
+    Depot "1" *-- "1" Carrier : carrier
 
-    Parcel *-- Zone : origin_zone
-    Parcel *-- Zone : destination_zone
-    Parcel o-- Zone : locker_zone
-    Parcel *-- Depot : depot
-    Parcel *-- Carrier : carrier
+    Parcel "1" *-- "1" Zone : origin_zone
+    Parcel "1" *-- "1" Zone : destination_zone
+    Parcel "1" *-- "0..1" Zone : locker_zone
+    Parcel "1" *-- "1" Depot : depot
+    Parcel "1" *-- "1" Carrier : carrier
+
+    SkimMatrix "1" *-- "1..*" Zone : zones
 ```
