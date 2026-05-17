@@ -39,11 +39,18 @@ classDiagram
 
     class Depot {
         +depot_id int
+        +zone_id int
+        +carrier str
     }
 
     class Parcel {
         +parcel_id int
+        +origin_zone int
+        +destination_zone int
+        +depot_id int
+        +carrier str
         +vehicle_type int
+        +locker_zone int
         +segment str
         +local_to_local bool
         +crowdshipping_eligible bool
@@ -60,15 +67,7 @@ classDiagram
     FileModel <|-- Zone
     FileModel <|-- Depot
     FileModel <|-- Carrier
+    FileModel <|-- Parcel
 
-    Depot "1" *-- "1" Zone : zone
-    Depot "1" *-- "1" Carrier : carrier
-
-    Parcel "1" *-- "1" Zone : origin_zone
-    Parcel "1" *-- "1" Zone : destination_zone
-    Parcel "1" *-- "0..1" Zone : locker_zone
-    Parcel "1" *-- "1" Depot : depot
-    Parcel "1" *-- "1" Carrier : carrier
-
-    SkimMatrix "1" *-- "1..*" Zone : zones
+    SkimMatrix --> Zone : zones
 ```
