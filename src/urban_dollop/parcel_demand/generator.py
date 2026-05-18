@@ -1,4 +1,5 @@
 import tomllib
+from math import isclose
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +21,7 @@ def generate_parcel_demand(
     config: ParcelDemandConfig | None = None,
 ) -> list[ParcelDemand]:
     config = _resolve_config(config)
+    _validate_carrier_shares(carriers)
 
     depots_by_carrier: dict[str, list[Depot]] = {}
     for d in depots:
@@ -83,3 +85,11 @@ def _resolve_config(config: ParcelDemandConfig | None) -> ParcelDemandConfig:
         toml_data.update(config.model_dump())
 
     return ParcelDemandConfig(**toml_data)
+
+
+def _validate_carrier_shares(carriers: list[Carrier]) -> None:
+    total_share = sum(carrier.share for carrier in carriers)
+    if not isclose(total_share, 1.0, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError(
+            f"Carrier shares must sum to 1.0, got {total_share:.12g}."
+        )

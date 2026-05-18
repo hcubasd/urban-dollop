@@ -124,9 +124,26 @@ def test_generate_parcel_demand_skips_carriers_without_depots(
     demands = generate_parcel_demand(
         zones,
         depots,
-        carriers + [Carrier(name="ghost", share=0.5)],
+        carriers + [Carrier(name="ghost", share=0.0)],
         skim,
     )
 
     assert len(demands) == 255
     assert all(d.depot_id is not None for d in demands)
+
+
+def test_generate_parcel_demand_requires_carrier_shares_to_sum_to_one(
+    joinville_paths: dict[str, Path], monkeypatch
+) -> None:
+    monkeypatch.chdir(joinville_paths["scenario_dir"])
+    fixtures_dir = joinville_paths["fixtures_dir"]
+
+    zones = Zone.from_file(fixtures_dir / "zones.gpkg")
+    depots = Depot.from_file(fixtures_dir / "depots.gpkg")
+    carriers = Carrier.from_file(fixtures_dir / "carrier_shares.csv")
+    skim = SkimMatrix.from_file(fixtures_dir / "skim_time.mtx", zones)
+
+    invalid_carriers = [*carriers[:-1], Carrier(name=carriers[-1].name, share=0.03)]
+
+    with pytest.raises(ValueError, match="Carrier shares must sum to 1.0"):
+        generate_parcel_demand(zones, depots, invalid_carriers, skim)

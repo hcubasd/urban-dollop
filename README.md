@@ -176,7 +176,8 @@ Total zonal demand is distributed across carriers by market share:
 $$D_{z,k} = \left\lfloor \sigma_k \cdot D_z \right\rceil$$
 
 where $\sigma_k$ is the market share of carrier $k$ (`Carrier.share`), and
-$\sum_k \sigma_k = 1$.
+$\sum_k \sigma_k = 1$. This normalization is required by the implementation and
+validated before demand is allocated across carriers.
 
 #### Depot assignment
 
@@ -191,8 +192,9 @@ zone $z$, read from the pre-computed skim matrix.
 
 #### Aggregation
 
-Flows that share the same destination zone and depot are summed:
+Flows that share the same destination zone, depot, and vehicle type are summed:
 
-$$F_{z,n} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k}$$
+$$F_{z,n,v} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k} \quad \text{for fixed vehicle type } v$$
 
-Each resulting $(z, n)$ pair with $F_{z,n} > 0$ becomes one `ParcelDemand` record.
+Each resulting $(z, n, v)$ tuple with $F_{z,n,v} > 0$ becomes one `ParcelDemand`
+record.
