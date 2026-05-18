@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic import BaseModel
 
 
@@ -15,3 +17,8 @@ class ParcelDemand(BaseModel):
     depot_id: int
     vehicle_type: int
     n_parcels: int
+
+    @classmethod
+    def to_file(cls, demands: list["ParcelDemand"], path: str | Path) -> None:
+        from urban_dollop.models.helpers.write_csv import write_csv
+        write_csv([d.model_dump() for d in demands], path)
