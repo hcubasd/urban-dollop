@@ -6,7 +6,6 @@ freight simulation system originally developed at TU Delft for the Dutch Randsta
 The models are reimplemented as a transparent, installable Python pipeline intended for
 academic research and reproducible urban logistics studies.
 
-The primary case study is Joinville, Santa Catarina, Brazil (43 traffic analysis zones).
 The primary novel contribution is the introduction of road grade as a dimension in
 emission accounting, enabling topographically accurate estimates in hilly cities.
 
@@ -164,57 +163,8 @@ zone $z$, read from the pre-computed skim matrix.
 
 #### Aggregation
 
-Flows that share the same destination zone and depot (possible when rounding produces
-identical assignments across carriers at the same depot) are summed:
+Flows that share the same destination zone and depot are summed:
 
 $$F_{z,n} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k}$$
 
 Each resulting $(z, n)$ pair with $F_{z,n} > 0$ becomes one `ParcelDemand` record.
-
----
-
-## Domain model
-
-```mermaid
-classDiagram
-    class Zone {
-        +zone_id int
-        +municipality str
-        +households int
-        +employment int
-        +from_file(path, columns) list
-    }
-
-    class Carrier {
-        +name str
-        +share float
-        +from_file(path, columns) list
-    }
-
-    class Depot {
-        +depot_id int
-        +zone_id int
-        +carrier str
-        +from_file(path, columns) list
-    }
-
-    class ParcelDemand {
-        +destination_zone_id int
-        +depot_id int
-        +vehicle_type int
-        +n_parcels int
-    }
-
-    class SkimMatrix {
-        +data ndarray
-        +n_zones int
-        +get(from_zone_id, to_zone_id) int
-        +from_file(path, zones) SkimMatrix
-    }
-
-    Depot --> Zone : zone_id
-    Depot --> Carrier : carrier
-    ParcelDemand --> Zone : destination_zone_id
-    ParcelDemand --> Depot : depot_id
-    SkimMatrix --> Zone : zones
-```
