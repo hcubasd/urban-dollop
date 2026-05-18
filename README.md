@@ -67,7 +67,6 @@ classDiagram
     FileModel <|-- Zone
     FileModel <|-- Depot
     FileModel <|-- Carrier
-    FileModel <|-- Parcel
 
     SkimMatrix --> Zone : zones
 ```

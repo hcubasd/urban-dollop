@@ -1,9 +1,9 @@
 from typing import Literal
 
-from urban_dollop.models.base import FileModel
+from pydantic import BaseModel
 
 
-class Parcel(FileModel):
+class Parcel(BaseModel):
     """A single parcel demand record — one row of the simulation output.
 
     Produced by parcel demand generation. Consumed by parcel tour
