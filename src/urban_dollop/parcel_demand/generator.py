@@ -27,10 +27,16 @@ def generate_parcel_demand(
 
     rows = []
     for zone in zones:
-        total = int(round(
-            zone.households * config.parcels_per_household / config.delivery_success_b2c +
-            zone.employment * config.parcels_per_employee / config.delivery_success_b2b
-        ))
+        total = int(
+            round(
+                zone.households
+                * config.parcels_per_household
+                / config.delivery_success_b2c
+                + zone.employment
+                * config.parcels_per_employee
+                / config.delivery_success_b2b
+            )
+        )
         if total == 0:
             continue
 
@@ -46,18 +52,22 @@ def generate_parcel_demand(
             times = [skim.get(d.zone_id, zone.zone_id) for d in carrier_depots]
             nearest_depot_id = carrier_depots[int(np.argmin(times))].depot_id
 
-            rows.append({
-                "destination_zone_id": zone.zone_id,
-                "depot_id": nearest_depot_id,
-                "vehicle_type": config.default_vehicle_type,
-                "n_parcels": n,
-            })
+            rows.append(
+                {
+                    "destination_zone_id": zone.zone_id,
+                    "depot_id": nearest_depot_id,
+                    "vehicle_type": config.default_vehicle_type,
+                    "n_parcels": n,
+                }
+            )
 
     if not rows:
         return []
 
     df = pd.DataFrame(rows)
-    df = df.groupby(["destination_zone_id", "depot_id", "vehicle_type"], as_index=False)["n_parcels"].sum()
+    df = df.groupby(
+        ["destination_zone_id", "depot_id", "vehicle_type"], as_index=False
+    )["n_parcels"].sum()
 
     return [ParcelDemand(**row) for row in df.to_dict("records")]
 

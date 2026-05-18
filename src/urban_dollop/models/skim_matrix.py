@@ -33,7 +33,9 @@ class SkimMatrix(BaseModel):
 
     def get(self, from_zone_id: int, to_zone_id: int) -> int:
         """Look up the skim value between two zones by their zone_id."""
-        return int(self.data[self._pos[from_zone_id] * self.n_zones + self._pos[to_zone_id]])
+        return int(
+            self.data[self._pos[from_zone_id] * self.n_zones + self._pos[to_zone_id]]
+        )
 
     @classmethod
     def from_file(

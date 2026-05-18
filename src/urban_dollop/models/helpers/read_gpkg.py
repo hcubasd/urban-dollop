@@ -3,7 +3,9 @@ from pathlib import Path
 import geopandas as gpd
 
 
-def read_gpkg(path: str | Path, columns: dict[str, str], fields: list[str]) -> list[dict]:
+def read_gpkg(
+    path: str | Path, columns: dict[str, str], fields: list[str]
+) -> list[dict]:
     df = gpd.read_file(path)
     df = df.rename(columns={v: k for k, v in columns.items()})
     missing = set(fields) - set(df.columns)

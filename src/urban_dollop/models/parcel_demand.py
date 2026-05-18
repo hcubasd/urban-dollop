@@ -21,4 +21,5 @@ class ParcelDemand(BaseModel):
     @classmethod
     def to_file(cls, demands: list["ParcelDemand"], path: str | Path) -> None:
         from urban_dollop.models.helpers.write_csv import write_csv
+
         write_csv([d.model_dump() for d in demands], path)
