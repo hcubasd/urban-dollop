@@ -13,6 +13,5 @@ class ParcelDemand(BaseModel):
 
     destination_zone_id: int
     depot_id: int
-    carrier: str
     vehicle_type: int
     n_parcels: int

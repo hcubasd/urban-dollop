@@ -41,7 +41,6 @@ classDiagram
     class ParcelDemand {
         +destination_zone_id int
         +depot_id int
-        +carrier str
         +vehicle_type int
         +n_parcels int
     }
@@ -57,6 +56,5 @@ classDiagram
     Depot --> Carrier : carrier
     ParcelDemand --> Zone : destination_zone_id
     ParcelDemand --> Depot : depot_id
-    ParcelDemand --> Carrier : carrier
     SkimMatrix --> Zone : zones
 ```
