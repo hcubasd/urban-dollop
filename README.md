@@ -17,44 +17,33 @@ consumed by every downstream module.
 
 ```mermaid
 classDiagram
-    class FileModel {
-        +from_file(path, columns) list
-    }
-
-    class GeoEntity {
-        +geometry
-    }
-
     class Zone {
         +zone_id int
         +municipality str
         +households int
         +employment int
+        +from_file(path, columns) list
     }
 
     class Carrier {
         +carrier str
         +share float
+        +from_file(path, columns) list
     }
 
     class Depot {
         +depot_id int
         +zone_id int
         +carrier str
+        +from_file(path, columns) list
     }
 
-    class Parcel {
-        +parcel_id int
-        +origin_zone_id int
+    class ParcelDemand {
         +destination_zone_id int
         +depot_id int
         +carrier str
         +vehicle_type int
-        +locker_zone_id int
-        +segment str
-        +local_to_local bool
-        +crowdshipping_eligible bool
-        +fulfilment_type str
+        +n_parcels int
     }
 
     class SkimMatrix {
@@ -63,10 +52,6 @@ classDiagram
         +get(from_zone_id, to_zone_id) int
         +from_file(path, zones) SkimMatrix
     }
-
-    FileModel <|-- Zone
-    FileModel <|-- Depot
-    FileModel <|-- Carrier
 
     SkimMatrix --> Zone : zones
 ```
