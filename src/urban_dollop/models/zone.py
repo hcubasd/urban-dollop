@@ -20,7 +20,6 @@ class Zone(BaseModel):
     """
 
     zone_id: int
-    municipality: str
     households: int
     employment: int
 

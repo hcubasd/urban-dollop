@@ -70,6 +70,13 @@ to map parcels delivered per zone):
 ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
 
+#### Example output
+
+![Parcel demand in Joinville by destination zone](docs/parcels_delivered.png)
+
+> [!NOTE]
+> Example choropleth of simulated parcel deliveries aggregated by `destination_zone_id` for the Joinville fixture scenario. Zone geometry is based on [IBGE territorial and census meshes](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais.html), household counts on [IBGE Census / SIDRA](https://sidra.ibge.gov.br/), employment on [RAIS microdata](https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/estatisticas-trabalho/microdados-rais-e-caged), and travel times on [OpenStreetMap](https://planet.openstreetmap.org/) routed with [OSRM](https://project-osrm.org/). Depot locations are scenario inputs compiled from public carrier and agency sources including [Correios](https://www.correios.com.br/agencias), [Mercado Envios](https://envios.mercadolivre.com.br), [Loggi](https://ajuda.loggi.com/hc/pt-br/articles/4410136350221-Quais-os-hor%C3%A1rios-de-funcionamento-das-ag%C3%AAncias), and [Amazon](https://sellercentral.amazon.com.br/help/hub/reference/external/G201811680). Carrier shares are scenario estimates synthesized from public market and company sources, including [Correios](https://www.correios.com.br/acesso-a-informacao/institucional/publicacoes/processos-de-contas-anuais-prestacao-de-contas/2024/ri_2024_matriz_final_22-05_sei.pdf) and [ABComm](https://dados.abcomm.org/).
+
 **Calibration — via `urban-dollop.toml`:**
 
 Place an `urban-dollop.toml` in your current working directory to set calibration
@@ -127,7 +134,6 @@ Canonical column names:
 | model | field | description |
 |---|---|---|
 | `Zone` | `zone_id` | unique integer zone identifier |
-| `Zone` | `municipality` | municipality name |
 | `Zone` | `households` | household count |
 | `Zone` | `employment` | employee count |
 | `Depot` | `depot_id` | unique integer depot identifier |

@@ -71,7 +71,7 @@ def test_generate_parcel_demand_programmatic_config_overrides_toml(
 
 
 def test_canonical_loaders_read_joinville_fixture_contract(
-    joinville_paths: dict[str, Path]
+    joinville_paths: dict[str, Path],
 ) -> None:
     fixtures_dir = joinville_paths["fixtures_dir"]
 
