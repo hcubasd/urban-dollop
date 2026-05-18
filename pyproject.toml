@@ -1,0 +1,32 @@
+[project]
+name = "urban-dollop"
+description = "Urban freight simulation based on the MASS-GT multi-agent model"
+readme = "README.md"
+requires-python = ">=3.11, <3.15"
+license = "GPL-2.0-only"
+authors = [
+  { name = "hcubasd", email = "127428549+hcubasd@users.noreply.github.com" }
+]
+urls = { Repository = "https://github.com/hcubasd/urban-dollop" }
+dependencies = [
+    "pydantic>=2.0",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "geopandas>=0.13",
+    "shapely>=2.0",
+]
+dynamic = ["version"]
+
+[project.scripts]
+urban-dollop = "urban_dollop.__main__:main"
+
+[project.optional-dependencies]
+fast = ["numba>=0.57"]
+
+[build-system]
+requires = ["hatch-vcs", "hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
