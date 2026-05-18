@@ -9,11 +9,11 @@ authors = [
 ]
 urls = { Repository = "https://github.com/hcubasd/urban-dollop" }
 dependencies = [
-    "pydantic>=2.0",
-    "numpy>=1.24",
-    "pandas>=2.0",
-    "geopandas>=0.13",
-    "shapely>=2.0",
+    "pydantic>=2.10",
+    "numpy>=2.3.2",
+    "pandas>=3.0",
+    "geopandas>=1.0",
+    "shapely>=2.1.2",
 ]
 dynamic = ["version"]
 
