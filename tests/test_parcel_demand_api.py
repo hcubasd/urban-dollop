@@ -1,0 +1,132 @@
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from urban_dollop import (
+    Carrier,
+    Depot,
+    ParcelDemandConfig,
+    SkimMatrix,
+    Zone,
+    generate_parcel_demand,
+)
+
+
+@pytest.fixture
+def joinville_paths() -> dict[str, Path]:
+    repo_root = Path(__file__).resolve().parents[1]
+    scenario_dir = repo_root / "tests" / "joinville"
+    fixtures_dir = scenario_dir / "fixtures"
+    return {"scenario_dir": scenario_dir, "fixtures_dir": fixtures_dir}
+
+
+def test_generate_parcel_demand_returns_stable_joinville_flows(
+    joinville_paths: dict[str, Path], monkeypatch
+) -> None:
+    monkeypatch.chdir(joinville_paths["scenario_dir"])
+    fixtures_dir = joinville_paths["fixtures_dir"]
+
+    zones = Zone.from_file(fixtures_dir / "zones.gpkg")
+    depots = Depot.from_file(fixtures_dir / "depots.gpkg")
+    carriers = Carrier.from_file(fixtures_dir / "carrier_shares.csv")
+    skim = SkimMatrix.from_file(fixtures_dir / "skim_time.mtx", zones)
+
+    demands = generate_parcel_demand(zones, depots, carriers, skim)
+
+    assert len(demands) == 255
+    assert sum(d.n_parcels for d in demands) == 43994
+    assert {d.vehicle_type for d in demands} == {7}
+    assert len({d.destination_zone_id for d in demands}) == 43
+
+
+def test_generate_parcel_demand_programmatic_config_overrides_toml(
+    joinville_paths: dict[str, Path], monkeypatch
+) -> None:
+    monkeypatch.chdir(joinville_paths["scenario_dir"])
+    fixtures_dir = joinville_paths["fixtures_dir"]
+
+    zones = Zone.from_file(fixtures_dir / "zones.gpkg")
+    depots = Depot.from_file(fixtures_dir / "depots.gpkg")
+    carriers = Carrier.from_file(fixtures_dir / "carrier_shares.csv")
+    skim = SkimMatrix.from_file(fixtures_dir / "skim_time.mtx", zones)
+
+    demands = generate_parcel_demand(
+        zones,
+        depots,
+        carriers,
+        skim,
+        ParcelDemandConfig(
+            parcels_per_household=0.1,
+            parcels_per_employee=0.0,
+            delivery_success_b2c=1.0,
+            delivery_success_b2b=1.0,
+            default_vehicle_type=9,
+        ),
+    )
+
+    assert len(demands) == 252
+    assert sum(d.n_parcels for d in demands) == 16062
+    assert {d.vehicle_type for d in demands} == {9}
+
+
+def test_canonical_loaders_read_joinville_fixture_contract(
+    joinville_paths: dict[str, Path]
+) -> None:
+    fixtures_dir = joinville_paths["fixtures_dir"]
+
+    zones = Zone.from_file(fixtures_dir / "zones.gpkg")
+    depots = Depot.from_file(fixtures_dir / "depots.gpkg")
+    carriers = Carrier.from_file(fixtures_dir / "carrier_shares.csv")
+    skim = SkimMatrix.from_file(fixtures_dir / "skim_time.mtx", zones)
+
+    assert len(zones) == 43
+    assert min(z.zone_id for z in zones) == 1
+    assert max(z.zone_id for z in zones) == 43
+    assert len(depots) == 15
+    assert len(carriers) == 6
+    assert skim.n_zones == 43
+    assert skim.get(zones[0].zone_id, zones[0].zone_id) >= 0
+
+
+def test_carrier_loader_raises_for_missing_required_columns(tmp_path: Path) -> None:
+    csv_path = tmp_path / "carrier_shares.csv"
+    csv_path.write_text("name\nalpha\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Missing columns"):
+        Carrier.from_file(csv_path)
+
+
+def test_skim_matrix_raises_for_invalid_shape(
+    joinville_paths: dict[str, Path], tmp_path: Path
+) -> None:
+    fixtures_dir = joinville_paths["fixtures_dir"]
+    zones = Zone.from_file(fixtures_dir / "zones.gpkg")
+
+    bad_skim_path = tmp_path / "bad_skim.mtx"
+    np.array([1, 2, 3], dtype=np.int32).tofile(bad_skim_path)
+
+    with pytest.raises(ValueError, match="Expected 43² = 1849 values"):
+        SkimMatrix.from_file(bad_skim_path, zones)
+
+
+def test_generate_parcel_demand_skips_carriers_without_depots(
+    joinville_paths: dict[str, Path], monkeypatch
+) -> None:
+    monkeypatch.chdir(joinville_paths["scenario_dir"])
+    fixtures_dir = joinville_paths["fixtures_dir"]
+
+    zones = Zone.from_file(fixtures_dir / "zones.gpkg")
+    depots = Depot.from_file(fixtures_dir / "depots.gpkg")
+    carriers = Carrier.from_file(fixtures_dir / "carrier_shares.csv")
+    skim = SkimMatrix.from_file(fixtures_dir / "skim_time.mtx", zones)
+
+    demands = generate_parcel_demand(
+        zones,
+        depots,
+        carriers + [Carrier(name="ghost", share=0.5)],
+        skim,
+    )
+
+    assert len(demands) == 255
+    assert all(d.depot_id is not None for d in demands)

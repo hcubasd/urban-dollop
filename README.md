@@ -32,10 +32,6 @@ This command:
 - reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` from `data/`
 - writes `parcel_demand.csv` to the current working directory by default
 
-The package entry point lives in `urban_dollop.__main__`, which delegates to the
-CLI package under `urban_dollop.cli/`. The command itself is intentionally thin:
-it loads canonical files, calls the Python API, and writes the resulting CSV.
-
 To write the CSV somewhere else, pass `--outdir` with either an existing directory
 or a full `.csv` path:
 
