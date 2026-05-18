@@ -53,5 +53,8 @@ classDiagram
         +from_file(path, zones) SkimMatrix
     }
 
+    Depot --> Zone : zone_id
+    ParcelDemand --> Zone : destination_zone_id
+    ParcelDemand --> Depot : depot_id
     SkimMatrix --> Zone : zones
 ```
