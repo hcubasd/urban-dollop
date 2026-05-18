@@ -54,7 +54,9 @@ classDiagram
     }
 
     Depot --> Zone : zone_id
+    Depot --> Carrier : carrier
     ParcelDemand --> Zone : destination_zone_id
     ParcelDemand --> Depot : depot_id
+    ParcelDemand --> Carrier : carrier
     SkimMatrix --> Zone : zones
 ```
