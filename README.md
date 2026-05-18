@@ -18,6 +18,32 @@ emission accounting, enabling topographically accurate estimates in hilly cities
 Estimate the daily parcel delivery demand for a study area from zonal population and
 employment data.
 
+**CLI**
+
+Run the parcel demand module from canonical files:
+
+```bash
+urban-dollop generate-demand data/
+```
+
+This command:
+
+- reads `urban-dollop.toml` from the current working directory
+- reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` from `data/`
+- writes `parcel_demand.csv` to the current working directory by default
+
+The package entry point lives in `urban_dollop.__main__`, which delegates to the
+CLI package under `urban_dollop.cli/`. The command itself is intentionally thin:
+it loads canonical files, calls the Python API, and writes the resulting CSV.
+
+To write the CSV somewhere else, pass `--outdir` with either an existing directory
+or a full `.csv` path:
+
+```bash
+urban-dollop generate-demand --outdir results/ data/
+urban-dollop generate-demand --outdir results/joinville_parcel_demand.csv data/
+```
+
 ```python
 from urban_dollop import Zone, Depot, Carrier, SkimMatrix, generate_parcel_demand
 
@@ -50,8 +76,8 @@ ParcelDemand.to_file(demands, "parcel_demand.csv")
 
 **Calibration — via `urban-dollop.toml`:**
 
-Place an `urban-dollop.toml` in your working directory to set calibration parameters
-without touching code:
+Place an `urban-dollop.toml` in your current working directory to set calibration
+parameters without touching code:
 
 ```toml
 [parcel_demand]

@@ -1,0 +1,94 @@
+import tomllib
+from pathlib import Path
+
+from urban_dollop import (
+    Carrier,
+    Depot,
+    ParcelDemand,
+    ParcelDemandConfig,
+    SkimMatrix,
+    Zone,
+    generate_parcel_demand,
+)
+
+DEFAULT_OUTPUT_FILENAME = "parcel_demand.csv"
+
+
+class CLIError(Exception):
+    """Raised for user-facing CLI usage errors."""
+
+
+def run_generate_demand(input_dir: str, outdir: str | None = None) -> int:
+    scenario_dir = Path(input_dir)
+    if not scenario_dir.exists():
+        raise CLIError(f"Input directory does not exist: {scenario_dir}")
+    if not scenario_dir.is_dir():
+        raise CLIError(f"Input path is not a directory: {scenario_dir}")
+
+    config_path = Path.cwd() / "urban-dollop.toml"
+    if not config_path.exists():
+        raise CLIError(
+            f"Missing configuration file: {config_path}. "
+            "Run the command from the project root or place urban-dollop.toml in the current working directory."
+        )
+
+    output_path = resolve_output_path(outdir)
+    zones_path = require_file(scenario_dir / "zones.gpkg")
+    depots_path = require_file(scenario_dir / "depots.gpkg")
+    carriers_path = require_file(scenario_dir / "carrier_shares.csv")
+    skim_path = require_file(scenario_dir / "skim_time.mtx")
+
+    try:
+        zones = Zone.from_file(zones_path)
+        depots = Depot.from_file(depots_path)
+        carriers = Carrier.from_file(carriers_path)
+        skim = SkimMatrix.from_file(skim_path, zones)
+        config = load_parcel_demand_config(config_path)
+        demands = generate_parcel_demand(
+            zones=zones,
+            depots=depots,
+            carriers=carriers,
+            skim=skim,
+            config=config,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise CLIError(str(exc)) from exc
+
+    ParcelDemand.to_file(demands, output_path)
+    print(f"Wrote {len(demands)} parcel demand rows to {output_path}")
+    return 0
+
+
+def resolve_output_path(outdir: str | None) -> Path:
+    if outdir is None:
+        return Path.cwd() / DEFAULT_OUTPUT_FILENAME
+
+    path = Path(outdir)
+    if path.exists():
+        if path.is_dir():
+            return path / DEFAULT_OUTPUT_FILENAME
+        return path
+
+    if path.suffix.lower() == ".csv":
+        if not path.parent.exists():
+            raise CLIError(f"Output parent directory does not exist: {path.parent}")
+        return path
+
+    raise CLIError(
+        f"Output path does not exist: {path}. "
+        "Pass an existing directory or a .csv file path whose parent directory already exists."
+    )
+
+
+def require_file(path: Path) -> Path:
+    if not path.exists():
+        raise CLIError(f"Missing required input file: {path}")
+    if not path.is_file():
+        raise CLIError(f"Expected a file but found something else: {path}")
+    return path
+
+
+def load_parcel_demand_config(path: Path) -> ParcelDemandConfig:
+    with open(path, "rb") as f:
+        data = tomllib.load(f).get("parcel_demand", {})
+    return ParcelDemandConfig(**data)
