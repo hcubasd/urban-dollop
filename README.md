@@ -18,28 +18,6 @@ emission accounting, enabling topographically accurate estimates in hilly cities
 Estimate the daily parcel delivery demand for a study area from zonal population and
 employment data.
 
-**CLI**
-
-Run the parcel demand module from canonical files:
-
-```bash
-urban-dollop generate-demand data/
-```
-
-This command:
-
-- reads `urban-dollop.toml` from the current working directory
-- reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` from `data/`
-- writes `parcel_demand.csv` to the current working directory by default
-
-To write the CSV somewhere else, pass `--outdir` with either an existing directory
-or a full `.csv` path:
-
-```bash
-urban-dollop generate-demand --outdir results/ data/
-urban-dollop generate-demand --outdir results/joinville_parcel_demand.csv data/
-```
-
 ```python
 from urban_dollop import Zone, Depot, Carrier, SkimMatrix, generate_parcel_demand
 
@@ -68,6 +46,28 @@ to map parcels delivered per zone):
 
 ```python
 ParcelDemand.to_file(demands, "parcel_demand.csv")
+```
+
+#### CLI
+
+Run the parcel demand module from canonical files:
+
+```bash
+urban-dollop generate-demand data/
+```
+
+This command:
+
+- reads `urban-dollop.toml` from the current working directory
+- reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` from `data/`
+- writes `parcel_demand.csv` to the current working directory by default
+
+To write the CSV somewhere else, pass `--outdir` with either an existing directory
+or a full `.csv` path:
+
+```bash
+urban-dollop generate-demand --outdir results/ data/
+urban-dollop generate-demand --outdir results/joinville_parcel_demand.csv data/
 ```
 
 #### Example output
