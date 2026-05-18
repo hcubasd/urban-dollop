@@ -14,7 +14,7 @@ class Carrier(BaseModel):
     before depot assignment.
     """
 
-    carrier: str
+    name: str
     share: float
 
     @field_validator("share")

@@ -26,7 +26,7 @@ classDiagram
     }
 
     class Carrier {
-        +carrier str
+        +name str
         +share float
         +from_file(path, columns) list
     }
