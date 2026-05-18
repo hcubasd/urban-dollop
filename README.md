@@ -45,12 +45,12 @@ classDiagram
 
     class Parcel {
         +parcel_id int
-        +origin_zone int
-        +destination_zone int
+        +origin_zone_id int
+        +destination_zone_id int
         +depot_id int
         +carrier str
         +vehicle_type int
-        +locker_zone int
+        +locker_zone_id int
         +segment str
         +local_to_local bool
         +crowdshipping_eligible bool
