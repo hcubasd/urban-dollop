@@ -20,8 +20,8 @@ class Zone(BaseModel):
     """
 
     zone_id: int
-    households: int
-    employment: int
+    households: float
+    employment: float
 
     @classmethod
     def from_file(cls, path: str | Path, columns: dict[str, str] = {}) -> list[Self]:

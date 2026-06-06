@@ -89,7 +89,8 @@ def _resolve_config(config: ParcelDemandConfig | None) -> ParcelDemandConfig:
 
 def _validate_carrier_shares(carriers: list[Carrier]) -> None:
     total_share = sum(carrier.share for carrier in carriers)
+    if not isclose(total_share, 1.0, rel_tol=0.0, abs_tol=1e-3):
+        raise ValueError(f"Carrier shares must sum to 1.0, got {total_share:.12g}.")
     if not isclose(total_share, 1.0, rel_tol=0.0, abs_tol=1e-9):
-        raise ValueError(
-            f"Carrier shares must sum to 1.0, got {total_share:.12g}."
-        )
+        for carrier in carriers:
+            carrier.share /= total_share

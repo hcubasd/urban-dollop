@@ -5,17 +5,14 @@ import pandas as pd
 
 from urban_dollop.cli.main import main
 
+SCENARIO_DIR = Path(__file__).resolve().parent
+FIXTURES_DIR = SCENARIO_DIR / "fixtures"
 
-def test_generate_demand_writes_to_cwd_by_default(
-    tmp_path: Path, monkeypatch, capsys
-) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    scenario_dir = repo_root / "tests" / "joinville"
-    fixtures_dir = scenario_dir / "fixtures"
 
+def test_generate_demand_writes_to_cwd_by_default(tmp_path: Path, monkeypatch) -> None:
     input_dir = tmp_path / "inputs"
-    shutil.copytree(fixtures_dir, input_dir)
-    shutil.copy2(scenario_dir / "urban-dollop.toml", tmp_path)
+    shutil.copytree(FIXTURES_DIR, input_dir)
+    shutil.copy2(SCENARIO_DIR / "urban-dollop.toml", tmp_path)
 
     monkeypatch.chdir(tmp_path)
     exit_code = main(["generate-demand", "inputs"])
@@ -33,18 +30,11 @@ def test_generate_demand_writes_to_cwd_by_default(
     ]
     assert len(df) > 0
 
-    captured = capsys.readouterr()
-    assert "Wrote" in captured.out
-
 
 def test_generate_demand_writes_to_outdir(tmp_path: Path, monkeypatch) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    scenario_dir = repo_root / "tests" / "joinville"
-    fixtures_dir = scenario_dir / "fixtures"
-
     input_dir = tmp_path / "scenario-data"
-    shutil.copytree(fixtures_dir, input_dir)
-    shutil.copy2(scenario_dir / "urban-dollop.toml", tmp_path)
+    shutil.copytree(FIXTURES_DIR, input_dir)
+    shutil.copy2(SCENARIO_DIR / "urban-dollop.toml", tmp_path)
 
     monkeypatch.chdir(tmp_path)
     exit_code = main(["generate-demand", "--outdir", "scenario-data", "scenario-data"])

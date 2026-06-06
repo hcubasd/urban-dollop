@@ -43,25 +43,31 @@ class SkimMatrix(BaseModel):
         path: str | Path,
         zones: list[Zone],
         headers: bool = False,
+        dtype: type = np.int32,
     ) -> "SkimMatrix":
         """Load a binary .mtx skim file.
 
         Parameters
         ----------
         path:
-            Path to a binary .mtx file: flat int32, N² elements.
+            Path to a binary .mtx file: flat numeric values, N² elements.
         zones:
-            Zone list for this scenario. Used to validate matrix shape and
-            to build the zone_id → position index. Must be sorted ascending
-            by zone_id, matching the row/column order in the file.
+            All zones in the scenario, including those with zero demand (depot
+            locations, external zones). Used to validate matrix shape and to
+            build the zone_id → position index. Sorted ascending by zone_id,
+            matching the row/column order in the file.
         headers:
-            Set to ``True`` if the file begins with a single int32 header
+            Set to ``True`` if the file begins with a single value header
             containing the zone count (original MASS-GT format). The header
             is stripped before reading the matrix values. Default is
             ``False`` (headerless, urban-dollop canonical format).
+        dtype:
+            NumPy dtype of the binary values. Use ``np.float32`` for original
+            MASS-GT .mtx files; ``np.int32`` (default) for the urban-dollop
+            canonical format.
         """
         zones = sorted(zones, key=lambda z: z.zone_id)
-        data = np.fromfile(path, dtype=np.int32)
+        data = np.fromfile(path, dtype=dtype)
         if headers:
             data = data[1:]
         n = len(zones)
