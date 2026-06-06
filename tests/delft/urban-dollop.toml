@@ -8,4 +8,3 @@ parcels_per_household = 0.2054  # B2C (0.195) + C2C (20.8/250/8.0 = 0.0104)
 parcels_per_employee = 0.0
 delivery_success_b2c = 0.90
 delivery_success_b2b = 0.95
-default_vehicle_type = 7

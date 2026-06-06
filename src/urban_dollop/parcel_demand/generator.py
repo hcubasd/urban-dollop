@@ -58,7 +58,6 @@ def generate_parcel_demand(
                 {
                     "destination_zone_id": zone.zone_id,
                     "depot_id": nearest_depot_id,
-                    "vehicle_type": config.default_vehicle_type,
                     "n_parcels": n,
                 }
             )
@@ -67,9 +66,9 @@ def generate_parcel_demand(
         return []
 
     df = pd.DataFrame(rows)
-    df = df.groupby(
-        ["destination_zone_id", "depot_id", "vehicle_type"], as_index=False
-    )["n_parcels"].sum()
+    df = df.groupby(["destination_zone_id", "depot_id"], as_index=False)[
+        "n_parcels"
+    ].sum()
 
     return [ParcelDemand(**row) for row in df.to_dict("records")]
 

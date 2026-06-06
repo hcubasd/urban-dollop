@@ -44,7 +44,6 @@ def test_generate_parcel_demand_returns_stable_delft_flows() -> None:
 
     assert sum(d.n_parcels for d in demands) == 89970
     assert len(demands) == 9439
-    assert {d.vehicle_type for d in demands} == {7}
 
 
 def test_generate_demand_writes_to_cwd_by_default(tmp_path: Path, monkeypatch) -> None:

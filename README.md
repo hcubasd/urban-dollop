@@ -36,7 +36,6 @@ demands  = generate_parcel_demand(zones, depots, carriers, skim)
 |---|---|---|
 | `destination_zone_id` | `int` | zone ID of the delivery address |
 | `depot_id` | `int` | depot that handles this flow |
-| `vehicle_type` | `int` | vehicle type code (default `7` = van) |
 | `n_parcels` | `int` | number of parcels in this flow |
 
 The origin zone of each flow is implicit — it is always the zone of the depot.
@@ -59,7 +58,6 @@ parcels_per_household = 0.2054  # B2C daily deliveries per household
 parcels_per_employee  = 0.0     # B2B daily deliveries per employee
 delivery_success_b2c  = 0.75    # first-attempt success rate, residential
 delivery_success_b2b  = 0.95    # first-attempt success rate, commercial
-default_vehicle_type  = 7       # 7 = van
 random_seed           = 42
 ```
 
@@ -77,7 +75,6 @@ demands = generate_parcel_demand(
         parcels_per_employee  = 0.029,
         delivery_success_b2c  = 0.80,
         delivery_success_b2b  = 0.95,
-        default_vehicle_type  = 7,
     ),
 )
 ```

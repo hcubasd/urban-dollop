@@ -31,7 +31,6 @@ def test_generate_parcel_demand_returns_stable_joinville_flows() -> None:
 
     assert len(demands) == 255
     assert sum(d.n_parcels for d in demands) == 43994
-    assert {d.vehicle_type for d in demands} == {7}
     assert len({d.destination_zone_id for d in demands}) == 43
 
 
@@ -51,13 +50,11 @@ def test_generate_parcel_demand_programmatic_config_overrides_toml() -> None:
             parcels_per_employee=0.0,
             delivery_success_b2c=1.0,
             delivery_success_b2b=1.0,
-            default_vehicle_type=9,
         ),
     )
 
     assert len(demands) == 252
     assert sum(d.n_parcels for d in demands) == 16062
-    assert {d.vehicle_type for d in demands} == {9}
 
 
 def test_canonical_loaders_read_joinville_fixture_contract() -> None:

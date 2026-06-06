@@ -25,7 +25,6 @@ def test_generate_demand_writes_to_cwd_by_default(tmp_path: Path, monkeypatch) -
     assert list(df.columns) == [
         "destination_zone_id",
         "depot_id",
-        "vehicle_type",
         "n_parcels",
     ]
     assert len(df) > 0
