@@ -9,7 +9,7 @@ from urban_dollop.models.zone import Zone
 class SkimMatrix(BaseModel):
     """A square zone-to-zone travel skim matrix.
 
-    Backed by a flat int32 array of N² values where element
+    Backed by a flat float32 array of N² values where element
     ``data[i * N + j]`` is the value from the zone at position i to the
     zone at position j. Positions are 0-based indices of zones sorted
     ascending by zone_id — the same order as the binary .mtx file.
@@ -31,9 +31,9 @@ class SkimMatrix(BaseModel):
     def n_zones(self) -> int:
         return len(self.zones)
 
-    def get(self, from_zone_id: int, to_zone_id: int) -> int:
+    def get(self, from_zone_id: int, to_zone_id: int) -> float:
         """Look up the skim value between two zones by their zone_id."""
-        return int(
+        return float(
             self.data[self._pos[from_zone_id] * self.n_zones + self._pos[to_zone_id]]
         )
 
@@ -43,14 +43,13 @@ class SkimMatrix(BaseModel):
         path: str | Path,
         zones: list[Zone],
         headers: bool = False,
-        dtype: type = np.int32,
     ) -> "SkimMatrix":
         """Load a binary .mtx skim file.
 
         Parameters
         ----------
         path:
-            Path to a binary .mtx file: flat numeric values, N² elements.
+            Path to a binary .mtx file: flat float32 values, N² elements.
         zones:
             All zones in the scenario, including those with zero demand (depot
             locations, external zones). Used to validate matrix shape and to
@@ -61,13 +60,9 @@ class SkimMatrix(BaseModel):
             containing the zone count (original MASS-GT format). The header
             is stripped before reading the matrix values. Default is
             ``False`` (headerless, urban-dollop canonical format).
-        dtype:
-            NumPy dtype of the binary values. Use ``np.float32`` for original
-            MASS-GT .mtx files; ``np.int32`` (default) for the urban-dollop
-            canonical format.
         """
         zones = sorted(zones, key=lambda z: z.zone_id)
-        data = np.fromfile(path, dtype=dtype)
+        data = np.fromfile(path, dtype=np.float32)
         if headers:
             data = data[1:]
         n = len(zones)

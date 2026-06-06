@@ -1,7 +1,6 @@
 import shutil
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from urban_dollop import (
@@ -25,7 +24,7 @@ def _load_fixtures():
     zones = Zone.from_file(FIXTURES_DIR / "zones.gpkg")
     depots = Depot.from_file(FIXTURES_DIR / "depots.gpkg")
     carriers = Carrier.from_file(FIXTURES_DIR / "carrier_shares.csv")
-    skim = SkimMatrix.from_file(FIXTURES_DIR / "skim_time.mtx", zones, dtype=np.float32)
+    skim = SkimMatrix.from_file(FIXTURES_DIR / "skim_time.mtx", zones)
     return zones, depots, carriers, skim
 
 
