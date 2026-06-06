@@ -188,15 +188,15 @@ travel time from the depot zone to the destination zone:
 
 $$\delta(z, k) = \underset{n \in \mathcal{N}_k}{\arg\min}\ t(n_{\text{zone}}, z)$$
 
-where $\mathcal{N}_k$ is the set of depots operated by carrier $k$ and
-$t(n_{\text{zone}}, z)$ is the travel time in seconds from the depot's zone to
-zone $z$, read from the pre-computed skim matrix.
+where:
+
+- $\mathcal{N}_k$ is the set of depots operated by carrier $k$
+- $t(n_{\text{zone}}, z)$ is the travel time from the depot's zone to zone $z$, read from the pre-computed skim matrix
 
 #### Aggregation
 
-Flows that share the same destination zone, depot, and vehicle type are summed:
+Flows that share the same destination zone and depot are summed:
 
-$$F_{z,n,v} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k} \quad \text{for fixed vehicle type } v$$
+$$F_{z,n} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k}$$
 
-Each resulting $(z, n, v)$ tuple with $F_{z,n,v} > 0$ becomes one `ParcelDemand`
-record.
+Each resulting $(z, n)$ pair with $F_{z,n} > 0$ becomes one `ParcelDemand` record.
