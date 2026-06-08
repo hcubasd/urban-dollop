@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Self
 
 from pydantic import BaseModel
 
@@ -16,6 +17,13 @@ class ParcelDemand(BaseModel):
     destination_zone_id: int
     depot_id: int
     n_parcels: int
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> list[Self]:
+        from urban_dollop.models.helpers.read_csv import read_csv
+
+        records = read_csv(path, {}, list(cls.model_fields))
+        return [cls(**r) for r in records]
 
     @classmethod
     def to_file(cls, demands: list["ParcelDemand"], path: str | Path) -> None:

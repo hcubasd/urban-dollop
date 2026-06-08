@@ -144,6 +144,99 @@ urban-dollop generate-demand --outdir results/joinville_parcel_demand.csv data/
 > [!NOTE]
 > Example choropleth of simulated parcel deliveries aggregated by `destination_zone_id` for the Delft fixture scenario. Study area covers five municipalities: Den Haag, Delft, Rijswijk, Leidschendam-Voorburg, and Midden-Delfland. Zone geometry, household counts, and employment are based on [AHN](https://ahn.nl/) and [CBS](https://www.cbs.nl/) data via the [LEAD project](https://www.leadproject.eu/) (2020). Travel times are derived from the [MASS-GT](https://github.com/mass-gt) Netherlands skim matrix. Depot locations and carrier shares are sourced from the MASS-GT LEADVersion scenario.
 
+### Parcel delivery scheduling
+
+Schedule the demand produced by `generate_parcel_demand` into vehicle tours.
+
+```python
+from urban_dollop import (
+    Depot, ParcelDemand, SkimMatrix, Vehicle,
+    schedule_parcel_deliveries,
+)
+
+depots   = Depot.from_file("depots.gpkg")
+vehicles = Vehicle.from_file("vehicles.csv")
+skim     = SkimMatrix.from_file("skim_time.mtx", zones)
+demands  = ParcelDemand.from_file("parcel_demand.csv")
+
+trips = schedule_parcel_deliveries(demands, depots, vehicles, skim)
+```
+
+`trips` is a `list[DeliveryTrip]` — one record per trip leg within a tour:
+
+| field | type | description |
+|---|---|---|
+| `tour_id` | `int` | unique tour identifier |
+| `trip_id` | `int` | sequential leg position within the tour |
+| `depot_id` | `int` | depot the tour departs from and returns to |
+| `carrier` | `str` | carrier operating the tour |
+| `origin_zone_id` | `int` | zone at the start of this leg |
+| `destination_zone_id` | `int` | zone at the end of this leg |
+| `n_parcels` | `int` | parcels delivered at this stop (0 for the return leg) |
+| `vehicle_id` | `int` | vehicle assigned to this tour |
+
+Each tour begins at the depot, visits a sequence of delivery stops, and ends with a
+return leg back to the depot (`n_parcels = 0`).
+
+**Save to CSV:**
+
+```python
+DeliveryTrip.to_file(trips, "delivery_trips.csv")
+```
+
+**Calibration — via `urban-dollop.toml`:**
+
+```toml
+[parcel_scheduling]
+seed = 42  # random seed for reproducible tour construction
+```
+
+**Calibration — programmatic override:**
+
+```python
+from urban_dollop import ParcelSchedulingConfig
+
+trips = schedule_parcel_deliveries(
+    demands, depots, vehicles, skim,
+    config=ParcelSchedulingConfig(seed=42),
+)
+```
+
+**Vehicle types — `vehicles.csv`:**
+
+```python
+vehicles = Vehicle.from_file("vehicles.csv")
+```
+
+| field | type | description |
+|---|---|---|
+| `vehicle_id` | `int` | unique vehicle type identifier |
+| `name` | `str` | vehicle type label |
+| `max_parcels` | `int` | maximum parcel capacity |
+
+The scheduler assigns the smallest vehicle whose capacity fits the tour load. If
+demand exceeds all vehicle capacities the largest vehicle is used.
+
+#### CLI
+
+Run the scheduling module from canonical files:
+
+```bash
+urban-dollop schedule-deliveries data/
+```
+
+This command:
+
+- reads `urban-dollop.toml` from the current working directory
+- reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, `vehicles.csv`,
+  `skim_time.mtx`, and `parcel_demand.csv` from `data/`
+- writes `delivery_trips.csv` to the current working directory by default
+
+```bash
+urban-dollop schedule-deliveries --outdir results/ data/
+urban-dollop schedule-deliveries --outdir results/delft_trips.csv data/
+```
+
 ---
 
 ## Mathematical models
@@ -200,3 +293,54 @@ Flows that share the same destination zone and depot are summed:
 $$F_{z,n} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k}$$
 
 Each resulting $(z, n)$ pair with $F_{z,n} > 0$ becomes one `ParcelDemand` record.
+
+### Parcel delivery scheduling
+
+The following models are implemented in `schedule_parcel_deliveries()`.
+
+#### Tour construction
+
+Demand records are grouped by depot. Within each depot, records are packed into
+tours using a greedy bin-packer that respects the maximum vehicle capacity $C$:
+
+$$\sum_{i \in \text{tour}} p_i \leq C$$
+
+where $p_i$ is the parcel count of demand record $i$ and $C$ is the
+`max_parcels` of the largest available vehicle.
+
+#### Nearest-neighbour routing
+
+Each tour's stop sequence is initialised with a nearest-neighbour heuristic.
+Starting from the depot zone $d$, the algorithm repeatedly appends the
+unvisited stop closest in travel time to the current position:
+
+$$\text{next} = \underset{j \in \mathcal{U}}{\arg\min}\ t(\text{current}, j)$$
+
+where $\mathcal{U}$ is the set of unvisited stops and $t(\cdot, \cdot)$ is
+the travel-time skim.
+
+#### 2-opt improvement
+
+The nearest-neighbour tour is refined with 2-opt. For each pair of edges
+$(a \to b)$ and $(c \to d)$ in the tour, the swap is accepted if:
+
+$$t(a, c) + t(b, d) < t(a, b) + t(c, d)$$
+
+Passes continue until no improving swap is found or a maximum of 10 passes
+is reached.
+
+#### Vehicle assignment
+
+After tour construction, the smallest vehicle whose capacity covers the tour
+load is selected:
+
+$$v^* = \underset{v\,:\,C_v \geq \sum_i p_i}{\arg\min}\ C_v$$
+
+#### Trip generation
+
+Each tour becomes a sequence of `DeliveryTrip` records. For a tour visiting
+stops $s_1, s_2, \ldots, s_m$ departing from depot zone $d$:
+
+$$d \to s_1 \to s_2 \to \cdots \to s_m \to d$$
+
+The final leg $(s_m \to d)$ is the return trip with $p = 0$.
