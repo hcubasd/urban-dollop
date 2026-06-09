@@ -30,7 +30,7 @@ demands  = generate_parcel_demand(zones, depots, carriers, skim)
 ```
 
 `demands` is a `list[ParcelDemand]` — one record per unique
-(destination zone, depot, vehicle type) combination:
+(destination zone, depot) combination:
 
 | field | type | description |
 |---|---|---|
@@ -58,7 +58,6 @@ parcels_per_household = 0.2054  # B2C daily deliveries per household
 parcels_per_employee  = 0.0     # B2B daily deliveries per employee
 delivery_success_b2c  = 0.75    # first-attempt success rate, residential
 delivery_success_b2b  = 0.95    # first-attempt success rate, commercial
-random_seed           = 42
 ```
 
 **Calibration — programmatic override:**
@@ -121,7 +120,7 @@ urban-dollop generate-demand data/
 This command:
 
 - reads `urban-dollop.toml` from the current working directory
-- reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` from `data/`
+- reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` (or `skim_time.mtx.gz`) from `data/`
 - writes `parcel_demand.csv` to the current working directory by default
 
 To write the CSV somewhere else, pass `--outdir` with either an existing directory
@@ -132,17 +131,12 @@ urban-dollop generate-demand --outdir results/ data/
 urban-dollop generate-demand --outdir results/joinville_parcel_demand.csv data/
 ```
 
-#### Example outputs
+#### Example output
 
-![Parcel demand in Joinville by destination zone](docs/joinville_parcels_delivered.png)
-
-> [!NOTE]
-> Example choropleth of simulated parcel deliveries aggregated by `destination_zone_id` for the Joinville fixture scenario. Zone geometry is based on [IBGE territorial and census meshes](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/malhas-territoriais.html), household counts on [IBGE Census / SIDRA](https://sidra.ibge.gov.br/), employment on [RAIS microdata](https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/estatisticas-trabalho/microdados-rais-e-caged), and travel times on [OpenStreetMap](https://planet.openstreetmap.org/) routed with [OSRM](https://project-osrm.org/). Depot locations are scenario inputs compiled from public carrier and agency sources including [Correios](https://www.correios.com.br/agencias), [Mercado Envios](https://envios.mercadolivre.com.br), [Loggi](https://ajuda.loggi.com/hc/pt-br/articles/4410136350221-Quais-os-hor%C3%A1rios-de-funcionamento-das-ag%C3%AAncias), and [Amazon](https://sellercentral.amazon.com.br/help/hub/reference/external/G201811680). Carrier shares are scenario estimates synthesized from public market and company sources, including [Correios](https://www.correios.com.br/acesso-a-informacao/institucional/publicacoes/processos-de-contas-anuais-prestacao-de-contas/2024/ri_2024_matriz_final_22-05_sei.pdf) and [ABComm](https://dados.abcomm.org/).
-
-![Parcel demand in Delft by destination zone](docs/delft_parcels_delivered.png)
+![Parcel demand in the Netherlands by destination zone](docs/parcel_demand.png)
 
 > [!NOTE]
-> Example choropleth of simulated parcel deliveries aggregated by `destination_zone_id` for the Delft fixture scenario. Study area covers five municipalities: Den Haag, Delft, Rijswijk, Leidschendam-Voorburg, and Midden-Delfland. Zone geometry, household counts, and employment are based on [AHN](https://ahn.nl/) and [CBS](https://www.cbs.nl/) data via the [LEAD project](https://www.leadproject.eu/) (2020). Travel times are derived from the [MASS-GT](https://github.com/mass-gt) Netherlands skim matrix. Depot locations and carrier shares are sourced from the MASS-GT LEADVersion scenario.
+> Example choropleth of simulated parcel deliveries aggregated by `destination_zone_id` for the Netherlands fixture scenario (5 925 zones, Randstad region). Zone geometry, household counts, and employment are from the [MASS-GT](https://github.com/mass-gt) LEADVersion dataset (SEGS2016, [CBS](https://www.cbs.nl/)). Travel times are derived from the MASS-GT Netherlands skim matrix. Depot locations and carrier shares are sourced from the MASS-GT LEADVersion scenario.
 
 ### Parcel delivery scheduling
 
@@ -229,13 +223,20 @@ This command:
 
 - reads `urban-dollop.toml` from the current working directory
 - reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, `vehicles.csv`,
-  `skim_time.mtx`, and `parcel_demand.csv` from `data/`
+  `skim_time.mtx` (or `skim_time.mtx.gz`), and `parcel_demand.csv` from `data/`
 - writes `delivery_trips.csv` to the current working directory by default
 
 ```bash
 urban-dollop schedule-deliveries --outdir results/ data/
-urban-dollop schedule-deliveries --outdir results/delft_trips.csv data/
+urban-dollop schedule-deliveries --outdir results/netherlands_trips.csv data/
 ```
+
+#### Example output
+
+![Delivery vehicle stops in the Netherlands by destination zone](docs/delivery_vehicle_stops.png)
+
+> [!NOTE]
+> Example choropleth of delivery vehicle stops aggregated by `destination_zone_id` for the Netherlands fixture scenario. Each stop represents one vehicle visit to a zone (one trip leg with `n_parcels > 0`). A zone receiving 6 stops has 6 separate vehicles — one per active carrier — stopping there on their respective tours. Same fixture as the parcel demand example above.
 
 ---
 

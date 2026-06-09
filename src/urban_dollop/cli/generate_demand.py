@@ -36,7 +36,7 @@ def run_generate_demand(input_dir: str, outdir: str | None = None) -> int:
     zones_path = require_file(scenario_dir / "zones.gpkg")
     depots_path = require_file(scenario_dir / "depots.gpkg")
     carriers_path = require_file(scenario_dir / "carrier_shares.csv")
-    skim_path = require_file(scenario_dir / "skim_time.mtx")
+    skim_path = require_skim_file(scenario_dir)
 
     try:
         zones = Zone.from_file(zones_path)
@@ -86,6 +86,14 @@ def require_file(path: Path) -> Path:
     if not path.is_file():
         raise CLIError(f"Expected a file but found something else: {path}")
     return path
+
+
+def require_skim_file(scenario_dir: Path) -> Path:
+    for name in ("skim_time.mtx", "skim_time.mtx.gz"):
+        p = scenario_dir / name
+        if p.exists():
+            return p
+    raise CLIError(f"Missing required input file: {scenario_dir / 'skim_time.mtx'} (or .gz)")
 
 
 def load_parcel_demand_config(path: Path) -> ParcelDemandConfig:

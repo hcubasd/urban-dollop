@@ -1,3 +1,4 @@
+import gzip
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +38,17 @@ class SkimMatrix(BaseModel):
             self.data[self._pos[from_zone_id] * self.n_zones + self._pos[to_zone_id]]
         )
 
+    def submatrix(self, zone_ids: list[int]) -> np.ndarray:
+        """Extract a contiguous sub-matrix for a subset of zones.
+
+        Returns a (k×k) float32 array where element [i, j] is the skim value
+        from zone_ids[i] to zone_ids[j]. Use this for tight loops that would
+        otherwise call get() millions of times.
+        """
+        positions = np.array([self._pos[z] for z in zone_ids], dtype=np.intp)
+        full = self.data.reshape(self.n_zones, self.n_zones)
+        return full[np.ix_(positions, positions)]
+
     @classmethod
     def from_file(
         cls,
@@ -62,7 +74,12 @@ class SkimMatrix(BaseModel):
             ``False`` (headerless, urban-dollop canonical format).
         """
         zones = sorted(zones, key=lambda z: z.zone_id)
-        data = np.fromfile(path, dtype=np.float32)
+        path = Path(path)
+        if path.suffix == ".gz":
+            with gzip.open(path, "rb") as f:
+                data = np.frombuffer(f.read(), dtype=np.float32).copy()
+        else:
+            data = np.fromfile(path, dtype=np.float32)
         if headers:
             data = data[1:]
         n = len(zones)

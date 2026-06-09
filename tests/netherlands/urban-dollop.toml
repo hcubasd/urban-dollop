@@ -1,0 +1,10 @@
+# urban-dollop configuration — Netherlands
+# Study area: full Netherlands (5925 zones with geometry + skim + socioeconomic data)
+# Base year: 2016 (SEGS2016)
+# Source: mass-gt/LEADVersion
+
+[parcel_demand]
+parcels_per_household = 0.2054
+parcels_per_employee = 0.0
+delivery_success_b2c = 0.90
+delivery_success_b2b = 0.95

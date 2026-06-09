@@ -85,6 +85,16 @@ def test_schedule_trip_ids_are_sequential_per_tour() -> None:
         assert ids == list(range(1, len(ids) + 1)), f"tour {tour_id}: {ids}"
 
 
+def test_schedule_raises_for_depot_zone_not_in_skim() -> None:
+    zones, depots, carriers, vehicles, skim = _load_fixtures()
+    demands = generate_parcel_demand(zones, depots, carriers, skim)
+
+    bad_depots = depots + [Depot(depot_id=99, carrier=carriers[0].name, zone_id=99999)]
+
+    with pytest.raises(ValueError, match="zone_id.*not present in the skim"):
+        schedule_parcel_deliveries(demands, bad_depots, vehicles, skim)
+
+
 def test_vehicle_from_file_validates_max_parcels(tmp_path: Path) -> None:
     csv_path = tmp_path / "vehicles.csv"
     csv_path.write_text("vehicle_id,name,max_parcels\n1,van,-10\n", encoding="utf-8")

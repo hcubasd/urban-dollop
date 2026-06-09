@@ -38,6 +38,7 @@ def schedule_parcel_deliveries(
     """
     config = _resolve_config(config)
     rng = np.random.default_rng(config.seed)
+    _validate_depot_zones(depots, skim)
 
     depot_map: dict[int, Depot] = {d.depot_id: d for d in depots}
     vehicles_sorted = sorted(vehicles, key=lambda v: v.max_parcels)
@@ -136,17 +137,21 @@ def _nearest_neighbour(
     skim: SkimMatrix,
 ) -> list[ParcelDemand]:
     """Build a tour by always visiting the nearest unvisited stop."""
-    remaining = list(stops)
-    ordered: list[ParcelDemand] = []
-    current = depot_zone_id
+    # depot at local index 0, stops at 1..n
+    zone_ids = [depot_zone_id] + [s.destination_zone_id for s in stops]
+    sub = skim.submatrix(zone_ids)
+
+    remaining = list(range(1, len(stops) + 1))  # local indices
+    ordered_local: list[int] = []
+    current = 0  # depot
 
     while remaining:
-        times = [skim.get(current, s.destination_zone_id) for s in remaining]
-        idx = int(np.argmin(times))
-        ordered.append(remaining.pop(idx))
-        current = ordered[-1].destination_zone_id
+        best = int(np.argmin(sub[current, remaining]))
+        current = remaining[best]
+        ordered_local.append(current)
+        remaining.pop(best)
 
-    return ordered
+    return [stops[idx - 1] for idx in ordered_local]
 
 
 def _two_opt(
@@ -159,34 +164,31 @@ def _two_opt(
     if len(stops) < 3:
         return stops
 
-    route = list(stops)
+    # depot at local index 0, stops at 1..n — build sub-matrix once
+    zone_ids = [depot_zone_id] + [s.destination_zone_id for s in stops]
+    sub = skim.submatrix(zone_ids)
+
+    n = len(stops)
+    route = np.arange(1, n + 1, dtype=np.intp)  # local indices, depot=0
 
     for _ in range(max_passes):
         improved = False
-        for i in range(len(route) - 1):
-            for j in range(i + 2, len(route)):
-                # Current: ...→route[i]→route[i+1]→...→route[j]→...
-                # Swap:    ...→route[i]→route[j]→...→route[i+1]→...
-                a = route[i - 1].destination_zone_id if i > 0 else depot_zone_id
-                b = route[i].destination_zone_id
-                c = route[j].destination_zone_id
-                d = (
-                    route[j + 1].destination_zone_id
-                    if j + 1 < len(route)
-                    else depot_zone_id
-                )
-
-                before = skim.get(a, b) + skim.get(c, d)
-                after = skim.get(a, c) + skim.get(b, d)
-
-                if after < before - 1e-6:
+        for i in range(n - 1):
+            a = route[i - 1] if i > 0 else 0
+            b = route[i]
+            ab = sub[a, b]
+            for j in range(i + 2, n):
+                c = route[j]
+                d = route[j + 1] if j + 1 < n else 0
+                if sub[a, c] + sub[b, d] < ab + sub[c, d] - 1e-6:
                     route[i : j + 1] = route[i : j + 1][::-1]
+                    b = route[i]
+                    ab = sub[a, b]
                     improved = True
-
         if not improved:
             break
 
-    return route
+    return [stops[idx - 1] for idx in route]
 
 
 def _select_vehicle(n_parcels: int, vehicles_sorted: list[Vehicle]) -> Vehicle:
@@ -195,6 +197,17 @@ def _select_vehicle(n_parcels: int, vehicles_sorted: list[Vehicle]) -> Vehicle:
         if v.max_parcels >= n_parcels:
             return v
     return vehicles_sorted[-1]
+
+
+def _validate_depot_zones(depots: list[Depot], skim: SkimMatrix) -> None:
+    missing = [d for d in depots if d.zone_id not in skim._pos]
+    if missing:
+        ids = ", ".join(str(d.depot_id) for d in missing)
+        zones = ", ".join(str(d.zone_id) for d in missing)
+        raise ValueError(
+            f"Depot(s) {ids} have zone_id(s) {zones} not present in the skim matrix. "
+            "Add these zones to your zones file or remove the depots."
+        )
 
 
 def _resolve_config(config: ParcelSchedulingConfig | None) -> ParcelSchedulingConfig:

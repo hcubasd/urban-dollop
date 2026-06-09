@@ -16,7 +16,6 @@ class ParcelDemandConfig(BaseModel):
     parcels_per_employee: float
     delivery_success_b2c: float
     delivery_success_b2b: float
-    random_seed: int | None = None
 
     @field_validator("parcels_per_household", "parcels_per_employee")
     @classmethod
