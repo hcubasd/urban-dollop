@@ -1,13 +1,52 @@
 # urban-dollop
 
-urban-dollop is a Python library that extracts and packages the mathematical models
-from [MASS-GT](https://github.com/orgs/mass-gt/repositories) — a multi-agent urban
-freight simulation system originally developed at TU Delft for the Dutch Randstad region.
-The models are reimplemented as a transparent, installable Python pipeline intended for
-academic research and reproducible urban logistics studies.
+urban-dollop is a general-purpose urban freight simulator packaged as a Python library.
+It incrementally extracts and abstracts the mathematical models from
+[MASS-GT](https://github.com/orgs/mass-gt/repositories) — a multi-agent urban freight
+simulation system developed at TU Delft — separating reusable model structure from
+Dutch-specific empirical parameters so the same pipeline can be applied to any study area.
 
-The primary novel contribution is the introduction of road grade as a dimension in
-emission accounting, enabling topographically accurate estimates in hilly cities.
+The primary novel scientific contribution is the integration of road grade into emission
+accounting via COPERT V, enabling topographically accurate emission estimates in hilly
+cities. This extends MASS-GT's network module with slope-aware route assignment and
+grade-segmented emission factors derived from a Digital Elevation Model (DEM).
+
+> **References**
+>
+> de Bok, M., Tavasszy, L., Thoen, S., Eggers, L., Kourounioti, I. (2025).
+> MASS-GT: an empirical model for the simulation of freight policies.
+> *Simulation Modelling Practice and Theory*, 142.
+> [https://doi.org/10.1016/j.simpat.2025.103140](https://doi.org/10.1016/j.simpat.2025.103140)
+>
+> Dias, H.L.F., Jenelius, E. (2026).
+> Assessing sustainable urban logistics hub impacts in Sweden: A case study of the Mall
+> of Scandinavia using integrated emission and freight network modelling.
+> *Urban Transitions*, 5, 100031.
+> [https://doi.org/10.1016/j.ubtr.2026.100031](https://doi.org/10.1016/j.ubtr.2026.100031)
+
+---
+
+## Modules
+
+The table below lists the full scope of the simulator. Modules are implemented
+incrementally; the current release covers the parcel segment.
+
+| Module | MASS-GT source | Status |
+|---|---|---|
+| Parcel demand generation | `parcel_dmnd` (BasGoed baseline) | ✅ implemented |
+| Parcel delivery scheduling | `parcel_schd` (BasGoed baseline) | ✅ implemented |
+| Network — route assignment | `traf` | 🔲 planned |
+| Emission calculation (COPERT V + grade) | `traf` + Dias & Jenelius (2026) | 🔲 planned |
+| KPI indicators | `outp` | 🔲 planned |
+| Service trip demand & distribution | `service` | 🔲 planned |
+| Freight shipment demand | `ship` | 🔲 planned |
+| Freight tour scheduling | `tour` | 🔲 planned |
+| Firm synthesizer | `fs` | 🔲 planned |
+
+Modules marked as implemented are based on the MASS-GT BasGoed formulation — the most
+abstractable version of those models, requiring only household counts, employment, and a
+travel-time skim matrix as inputs. Enhancement toward the HARMONY v3 formulations (e.g.
+an ordered logit B2C demand model) is planned as part of the incremental development.
 
 ---
 
@@ -242,8 +281,9 @@ urban-dollop schedule-deliveries --outdir results/netherlands_trips.csv data/
 
 ## Mathematical models
 
-The following models are extracted from MASS-GT's `parcel_dmnd` module and implemented
-in `generate_parcel_demand()`.
+The following specifications cover the currently implemented modules. Each section
+references the corresponding MASS-GT module and notes where the implementation
+follows the BasGoed formulation rather than the HARMONY v3 version.
 
 ### Parcel demand generation
 
@@ -296,8 +336,6 @@ $$F_{z,n} = \sum_{k\,:\,\delta(z,k) = n} D_{z,k}$$
 Each resulting $(z, n)$ pair with $F_{z,n} > 0$ becomes one `ParcelDemand` record.
 
 ### Parcel delivery scheduling
-
-The following models are implemented in `schedule_parcel_deliveries()`.
 
 #### Tour construction
 
