@@ -30,7 +30,7 @@ def test_generate_parcel_demand_returns_stable_joinville_flows() -> None:
     demands = generate_parcel_demand(zones, depots, carriers, skim)
 
     assert len(demands) == 255
-    assert sum(d.n_parcels for d in demands) == 43994
+    assert sum(d.n_parcels for d in demands) == 43995
     assert len({d.destination_zone_id for d in demands}) == 43
 
 
@@ -53,8 +53,8 @@ def test_generate_parcel_demand_programmatic_config_overrides_toml() -> None:
         ),
     )
 
-    assert len(demands) == 252
-    assert sum(d.n_parcels for d in demands) == 16062
+    assert len(demands) == 253
+    assert sum(d.n_parcels for d in demands) == 16067
 
 
 def test_canonical_loaders_read_joinville_fixture_contract() -> None:

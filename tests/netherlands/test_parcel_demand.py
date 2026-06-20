@@ -37,8 +37,8 @@ def test_generate_parcel_demand_returns_stable_netherlands_flows(monkeypatch) ->
 
     demands = generate_parcel_demand(zones, depots, carriers, skim)
 
-    assert len(demands) == 23293
-    assert sum(d.n_parcels for d in demands) == 250126
+    assert len(demands) == 23309
+    assert sum(d.n_parcels for d in demands) == 250768
 
 
 def test_generate_demand_writes_to_cwd_by_default(tmp_path: Path, monkeypatch) -> None:

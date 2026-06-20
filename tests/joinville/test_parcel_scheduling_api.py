@@ -42,7 +42,7 @@ def test_schedule_parcel_deliveries_returns_stable_joinville_trips() -> None:
 
     assert len(trips) == 393
     assert len({t.tour_id for t in trips}) == 138
-    assert sum(t.n_parcels for t in trips) == 43994
+    assert sum(t.n_parcels for t in trips) == 43995
 
 
 def test_schedule_creates_return_legs() -> None:

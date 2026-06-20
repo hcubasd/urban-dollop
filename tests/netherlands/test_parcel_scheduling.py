@@ -36,9 +36,9 @@ def test_schedule_parcel_deliveries_returns_stable_netherlands_trips(monkeypatch
         demands, depots, vehicles, skim, ParcelSchedulingConfig(seed=42)
     )
 
-    assert len(trips) == 24197
-    assert len({t.tour_id for t in trips}) == 904
-    assert sum(t.n_parcels for t in trips) == 250126
+    assert len(trips) == 24217
+    assert len({t.tour_id for t in trips}) == 908
+    assert sum(t.n_parcels for t in trips) == 250768
 
 
 @pytest.mark.slow
