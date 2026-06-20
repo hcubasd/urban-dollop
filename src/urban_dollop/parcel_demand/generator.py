@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from urban_dollop.helpers.validation import validate_depot_zones
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.depot import Depot
 from urban_dollop.models.parcel_demand import ParcelDemand
@@ -22,7 +23,7 @@ def generate_parcel_demand(
 ) -> list[ParcelDemand]:
     config = _resolve_config(config)
     _validate_carrier_shares(carriers)
-    _validate_depot_zones(depots, skim)
+    validate_depot_zones(depots, skim)
 
     depots_by_carrier: dict[str, list[Depot]] = {}
     for d in depots:
@@ -103,17 +104,6 @@ def _resolve_config(config: ParcelDemandConfig | None) -> ParcelDemandConfig:
         toml_data.update(config.model_dump())
 
     return ParcelDemandConfig(**toml_data)
-
-
-def _validate_depot_zones(depots: list[Depot], skim: SkimMatrix) -> None:
-    missing = [d for d in depots if d.zone_id not in skim._pos]
-    if missing:
-        ids = ", ".join(str(d.depot_id) for d in missing)
-        zones = ", ".join(str(d.zone_id) for d in missing)
-        raise ValueError(
-            f"Depot(s) {ids} have zone_id(s) {zones} not present in the skim matrix. "
-            "Add these zones to your zones file or remove the depots."
-        )
 
 
 def _validate_carrier_depots(

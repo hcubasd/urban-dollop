@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import BaseModel
 
-from urban_dollop.models.helpers.read_gpkg import read_gpkg
+from urban_dollop.helpers.read_gpkg import read_gpkg
 
 
 class Depot(BaseModel):

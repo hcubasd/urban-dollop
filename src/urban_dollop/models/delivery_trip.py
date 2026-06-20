@@ -25,6 +25,6 @@ class DeliveryTrip(BaseModel):
 
     @classmethod
     def to_file(cls, trips: list["DeliveryTrip"], path: str | Path) -> None:
-        from urban_dollop.models.helpers.write_csv import write_csv
+        from urban_dollop.helpers.write_csv import write_csv
 
         write_csv([t.model_dump() for t in trips], path)

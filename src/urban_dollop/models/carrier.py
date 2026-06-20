@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import BaseModel, field_validator
 
-from urban_dollop.models.helpers.read_csv import read_csv
+from urban_dollop.helpers.read_csv import read_csv
 
 
 class Carrier(BaseModel):
