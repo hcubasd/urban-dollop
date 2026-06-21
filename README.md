@@ -26,7 +26,7 @@ study-area-specific parameters so the same pipeline can be applied to any city.
 ## Installation
 
 ```bash
-pip install -e .
+pip install urban-dollop
 ```
 
 ---
