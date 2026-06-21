@@ -1,8 +1,10 @@
 import pytest
 
-from urban_dollop import generate_parcel_demand
+from urban_dollop import generate_logit_demand, generate_parcel_demand
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.depot import Depot
+from urban_dollop.models.zone import Zone
+from urban_dollop.parcel_demand.logit_config import LogitDemandConfig
 
 
 def zone_total(zone, config):
@@ -99,3 +101,66 @@ def test_raises_for_non_positive_calibration_target(zones, depots, carriers, ski
             delivery_success_b2b=1.0,
             calibration_target=0.0,
         )
+
+
+# ---------------------------------------------------------------------------
+# Ordered logit formulation
+# ---------------------------------------------------------------------------
+
+
+def test_logit_returns_parcel_demands(logit_zones, depots, carriers, skim, logit_config):
+    demands = generate_logit_demand(logit_zones, depots, carriers, skim, logit_config)
+    assert isinstance(demands, list)
+    assert len(demands) > 0
+    assert all(d.n_parcels > 0 for d in demands)
+
+
+def test_logit_all_destination_zones_are_input_zones(logit_zones, depots, carriers, skim, logit_config):
+    valid_ids = {z.zone_id for z in logit_zones}
+    demands = generate_logit_demand(logit_zones, depots, carriers, skim, logit_config)
+    assert all(d.destination_zone_id in valid_ids for d in demands)
+
+
+def test_logit_all_depot_ids_are_input_depots(logit_zones, depots, carriers, skim, logit_config):
+    valid_ids = {d.depot_id for d in depots}
+    demands = generate_logit_demand(logit_zones, depots, carriers, skim, logit_config)
+    assert all(d.depot_id in valid_ids for d in demands)
+
+
+def test_logit_calibration_target_scales_total(logit_zones, depots, carriers, skim, logit_config):
+    config = logit_config.model_copy(update={"calibration_target": 100.0})
+    demands = generate_logit_demand(logit_zones, depots, carriers, skim, config)
+    total = sum(d.n_parcels for d in demands)
+    assert abs(total - 100) <= len(logit_zones)
+
+
+def test_logit_raises_for_missing_population(logit_zones, depots, carriers, skim, logit_config):
+    bad_zones = [z.model_copy(update={"population": None}) if z.zone_id == 1 else z for z in logit_zones]
+    with pytest.raises(ValueError, match="population"):
+        generate_logit_demand(bad_zones, depots, carriers, skim, logit_config)
+
+
+def test_logit_raises_for_missing_urbanization_level(logit_zones, depots, carriers, skim, logit_config):
+    bad_zones = [z.model_copy(update={"urbanization_level": None}) if z.zone_id == 1 else z for z in logit_zones]
+    with pytest.raises(ValueError, match="urbanization_level"):
+        generate_logit_demand(bad_zones, depots, carriers, skim, logit_config)
+
+
+def test_logit_config_raises_for_wrong_mu_length():
+    with pytest.raises(Exception, match="mu_thresholds"):
+        LogitDemandConfig(
+            beta_urbanization={1: 0.0},
+            mu_thresholds=[1.0, 2.0],  # should be 8 for default 9 parcel levels
+        )
+
+
+def test_logit_higher_urbanization_produces_more_demand(depots, carriers, skim):
+    low_urb = [Zone(zone_id=i, households=0, employment=0, population=100, urbanization_level=1) for i in range(1, 5)]
+    high_urb = [Zone(zone_id=i, households=0, employment=0, population=100, urbanization_level=2) for i in range(1, 5)]
+    config = LogitDemandConfig(
+        beta_urbanization={1: 0.0, 2: 2.0},
+        mu_thresholds=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+    )
+    low_total = sum(d.n_parcels for d in generate_logit_demand(low_urb, depots, carriers, skim, config))
+    high_total = sum(d.n_parcels for d in generate_logit_demand(high_urb, depots, carriers, skim, config))
+    assert high_total > low_total

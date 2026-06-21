@@ -22,6 +22,8 @@ class Zone(BaseModel):
     zone_id: int
     households: float
     employment: float
+    population: float | None = None
+    urbanization_level: int | None = None
 
     @classmethod
     def from_file(cls, path: str | Path, columns: dict[str, str] = {}) -> list[Self]:

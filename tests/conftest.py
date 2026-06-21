@@ -7,6 +7,7 @@ from urban_dollop.models.skim_matrix import SkimMatrix
 from urban_dollop.models.vehicle import Vehicle
 from urban_dollop.models.zone import Zone
 from urban_dollop.parcel_demand.config import ParcelDemandConfig
+from urban_dollop.parcel_demand.logit_config import LogitDemandConfig
 
 
 @pytest.fixture
@@ -64,4 +65,23 @@ def demand_config():
         parcels_per_employee=0.04,
         delivery_success_b2c=1.0,
         delivery_success_b2b=1.0,
+    )
+
+
+@pytest.fixture
+def logit_zones():
+    return [
+        Zone(zone_id=1, households=100, employment=50, population=250, urbanization_level=1),
+        Zone(zone_id=2, households=200, employment=0,  population=500, urbanization_level=2),
+        Zone(zone_id=3, households=0,   employment=150, population=80,  urbanization_level=1),
+        Zone(zone_id=4, households=50,  employment=25, population=120, urbanization_level=2),
+    ]
+
+
+@pytest.fixture
+def logit_config():
+    # 9 parcel levels → 8 thresholds; β slightly positive for urb=2
+    return LogitDemandConfig(
+        beta_urbanization={1: 0.0, 2: 0.5},
+        mu_thresholds=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
     )

@@ -131,6 +131,70 @@ from `data/`. Writes `parcel_demand.csv` to the current directory by default.
 
 ---
 
+### Parcel demand generation — ordered logit formulation
+
+For contexts where zone-level population and an urbanization classification are
+available, the HARMONY v3 ordered logit formulation can be used instead.
+
+```python
+from urban_dollop import Zone, Depot, Carrier, SkimMatrix, generate_logit_demand, LogitDemandConfig
+
+zones = Zone.from_file("zones.gpkg")   # must include population and urbanization_level columns
+depots = Depot.from_file("depots.gpkg")
+carriers = Carrier.from_file("carrier_shares.csv")
+skim = SkimMatrix.from_file("skim_time.mtx", zones)
+
+demands = generate_logit_demand(zones, depots, carriers, skim,
+    config=LogitDemandConfig(
+        beta_urbanization={1: -0.5, 2: -0.3, 3: 0.0, 4: 0.2, 5: 0.4},
+        mu_thresholds=[-1.5, 0.5, 1.5, 2.2, 2.8, 3.3, 4.2, 5.0],
+    ),
+)
+```
+
+The logit model computes expected monthly B2C parcels per person using an ordered
+logit over urbanization level, then converts to daily demand and multiplies by
+zone population. It returns the same `list[ParcelDemand]` as the linear formulation.
+
+**Zone fields required by the logit formulation:**
+
+| field | type | description |
+|---|---|---|
+| `population` | `float` | total resident population |
+| `urbanization_level` | `int` | urbanization class (arbitrary integer scale; must match keys in `beta_urbanization`) |
+
+**`LogitDemandConfig` parameters:**
+
+| parameter | type | description |
+|---|---|---|
+| `beta_urbanization` | `dict[int, float]` | linear predictor coefficient per urbanization level |
+| `mu_thresholds` | `list[float]` | ordered logit threshold vector; length must equal `len(parcel_levels) - 1` |
+| `parcel_levels` | `list[int]` | parcel count categories (default: `[0, 1, 2, 3, 4, 5, 10, 15, 20]`) |
+| `monthly_to_daily_divisor` | `float` | divides monthly expected demand to obtain daily (default: `60.0`) |
+| `calibration_target` | `float \| None` | optional aggregate scaling, same semantics as the linear formulation |
+
+Parameters are estimated from survey data. Dutch estimates from HARMONY v3
+(de Bok et al. 2025) may be used as a prior when local data are not available.
+
+**Via `urban-dollop.toml`:**
+
+```toml
+[parcel_demand_logit]
+monthly_to_daily_divisor = 60.0
+mu_thresholds = [-1.5, 0.5, 1.5, 2.2, 2.8, 3.3, 4.2, 5.0]
+# calibration_target = 50000
+
+[parcel_demand_logit.beta_urbanization]
+# TOML keys are strings; they are coerced to integers automatically
+"1" = -0.5
+"2" = -0.3
+"3" = 0.0
+"4" = 0.2
+"5" = 0.4
+```
+
+---
+
 ### Parcel delivery scheduling
 
 Schedule demand into vehicle tours.
