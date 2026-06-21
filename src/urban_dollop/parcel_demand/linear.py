@@ -91,7 +91,9 @@ def _allocate_by_share(total: int, shares: list[float]) -> list[int]:
     remaining = total - sum(floors)
     if remaining > 0:
         remainders = [q - f for q, f in zip(quotas, floors)]
-        for i in sorted(range(len(remainders)), key=lambda i: -remainders[i])[:remaining]:
+        for i in sorted(range(len(remainders)), key=lambda i: -remainders[i])[
+            :remaining
+        ]:
             floors[i] += 1
     return floors
 

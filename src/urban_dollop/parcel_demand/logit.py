@@ -75,7 +75,9 @@ def generate(
         return []
 
     df = pd.DataFrame(rows)
-    df = df.groupby(["destination_zone_id", "depot_id"], as_index=False)["n_parcels"].sum()
+    df = df.groupby(["destination_zone_id", "depot_id"], as_index=False)[
+        "n_parcels"
+    ].sum()
     return [ParcelDemand(**row) for row in df.to_dict("records")]
 
 

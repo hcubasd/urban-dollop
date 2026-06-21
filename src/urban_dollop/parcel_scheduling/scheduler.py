@@ -56,7 +56,9 @@ def schedule_parcel_deliveries(
         depot = depot_map[depot_id]
 
         # Split demands into vehicle-capacity tours using spatial clustering
-        tours = _cluster_demands_spatially(depot_demands, depot.zone_id, max_capacity, skim)
+        tours = _cluster_demands_spatially(
+            depot_demands, depot.zone_id, max_capacity, skim
+        )
 
         for stop_list in tours:
             tour_id += 1

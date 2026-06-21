@@ -49,12 +49,27 @@ def vehicles():
 def skim(zones):
     # Travel times (minutes): symmetric, zero diagonal
     #       z1  z2  z3  z4
-    data = np.array([
-         0, 10, 20, 15,
-        10,  0, 12,  8,
-        20, 12,  0, 18,
-        15,  8, 18,  0,
-    ], dtype=np.float32)
+    data = np.array(
+        [
+            0,
+            10,
+            20,
+            15,
+            10,
+            0,
+            12,
+            8,
+            20,
+            12,
+            0,
+            18,
+            15,
+            8,
+            18,
+            0,
+        ],
+        dtype=np.float32,
+    )
     return SkimMatrix(data=data, zones=zones)
 
 
@@ -71,10 +86,30 @@ def demand_config():
 @pytest.fixture
 def logit_zones():
     return [
-        Zone(zone_id=1, households=100, employment=50, population=250, urbanization_level=1),
-        Zone(zone_id=2, households=200, employment=0,  population=500, urbanization_level=2),
-        Zone(zone_id=3, households=0,   employment=150, population=80,  urbanization_level=1),
-        Zone(zone_id=4, households=50,  employment=25, population=120, urbanization_level=2),
+        Zone(
+            zone_id=1,
+            households=100,
+            employment=50,
+            population=250,
+            urbanization_level=1,
+        ),
+        Zone(
+            zone_id=2,
+            households=200,
+            employment=0,
+            population=500,
+            urbanization_level=2,
+        ),
+        Zone(
+            zone_id=3, households=0, employment=150, population=80, urbanization_level=1
+        ),
+        Zone(
+            zone_id=4,
+            households=50,
+            employment=25,
+            population=120,
+            urbanization_level=2,
+        ),
     ]
 
 

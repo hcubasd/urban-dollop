@@ -24,8 +24,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--outdir",
         help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the current working directory.",
     )
+    generate_demand.add_argument(
+        "--logit",
+        action="store_true",
+        help="Use the ordered logit demand formulation instead of the linear formulation.",
+    )
     generate_demand.set_defaults(
-        handler=lambda args: run_generate_demand(args.input_dir, args.outdir)
+        handler=lambda args: run_generate_demand(
+            args.input_dir, args.outdir, logit=args.logit
+        )
     )
 
     schedule_deliveries = subparsers.add_parser(

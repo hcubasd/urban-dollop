@@ -35,20 +35,21 @@ pip install urban-dollop
 
 ### Parcel demand generation
 
-Estimate daily parcel delivery demand from zonal population and employment data.
+Estimates daily parcel delivery demand by zone and assigns each flow to a depot.
+Two formulations are available; both accept the same depot, carrier, and skim
+inputs and return the same `list[ParcelDemand]`.
+
+**Shared inputs:**
 
 ```python
-from urban_dollop import Zone, Depot, Carrier, SkimMatrix, generate_parcel_demand
+from urban_dollop import Zone, Depot, Carrier, SkimMatrix
 
-zones = Zone.from_file("zones.gpkg")
 depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
 skim = SkimMatrix.from_file("skim_time.mtx", zones)
-
-demands = generate_parcel_demand(zones, depots, carriers, skim)
 ```
 
-`demands` is a `list[ParcelDemand]` — one record per `(destination_zone, depot)` pair:
+**Output** — `list[ParcelDemand]`, one record per `(destination_zone, depot)` pair:
 
 | field | type | description |
 |---|---|---|
@@ -56,13 +57,28 @@ demands = generate_parcel_demand(zones, depots, carriers, skim)
 | `depot_id` | `int` | depot handling this flow |
 | `n_parcels` | `int` | number of parcels |
 
-**Save to CSV:**
-
 ```python
 ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
 
-**Calibration via `urban-dollop.toml`:**
+Both formulations accept an optional `calibration_target` (total daily parcels
+in the study area). When set, all zone demands are scaled proportionally so the
+study-area total matches the target; the spatial distribution is preserved.
+
+#### Linear formulation
+
+Use `generate_parcel_demand` when your zone data has household and employment
+counts. Demand is a linear rate applied per household and per employee:
+
+```python
+from urban_dollop import generate_parcel_demand, ParcelDemandConfig
+
+zones = Zone.from_file("zones.gpkg")
+
+demands = generate_parcel_demand(zones, depots, carriers, skim)
+```
+
+Configure via `urban-dollop.toml`:
 
 ```toml
 [parcel_demand]
@@ -70,20 +86,12 @@ parcels_per_household = 0.2054
 parcels_per_employee  = 0.0
 delivery_success_b2c  = 0.75
 delivery_success_b2b  = 0.95
-# calibration_target = 50000  # optional: scale total to a known daily count
+# calibration_target = 50000
 ```
 
-The rate parameters (`parcels_per_household`, `parcels_per_employee`) control
-the spatial distribution of demand across zones. `calibration_target`, when
-set, applies a proportional scaling factor so the study-area total matches a
-known aggregate — for example, a national parcel volume statistic divided by
-the number of cities. The spatial distribution is preserved.
-
-**Programmatic override:**
+Or programmatically:
 
 ```python
-from urban_dollop import ParcelDemandConfig
-
 demands = generate_parcel_demand(
     zones, depots, carriers, skim,
     config=ParcelDemandConfig(
@@ -91,28 +99,50 @@ demands = generate_parcel_demand(
         parcels_per_employee=0.029,
         delivery_success_b2c=0.80,
         delivery_success_b2b=0.95,
-        calibration_target=50000,  # optional
+        calibration_target=50000, # optional
     ),
 )
 ```
 
-**Column mapping** — when your files use different column names:
+#### Ordered logit formulation
+
+Use `generate_logit_demand` when your zone data has population and an
+urbanization classification. Demand is derived from an ordered logit model over
+urbanization level:
 
 ```python
+from urban_dollop import generate_logit_demand, LogitDemandConfig
+
 zones = Zone.from_file("zones.gpkg", columns={
     "zone_id": "id",
-    "households": "hh_count",
-    "employment": "jobs",
+    "population": "inwoners",
+    "urbanization_level": "STED",
 })
+
+demands = generate_logit_demand(
+    zones, depots, carriers, skim,
+    config=LogitDemandConfig(
+        beta_urbanization={1: ..., 2: ..., 3: ..., 4: ..., 5: ...},
+        mu_thresholds=[..., ..., ..., ..., ..., ..., ..., ...], # 8 values
+        calibration_target=50000, # optional
+    ),
+)
 ```
 
-Canonical field names:
+`beta_urbanization` and `mu_thresholds` are estimated from a household travel
+survey. Dutch estimates from HARMONY v3 (de Bok et al. 2025) can be used as a
+prior when local survey data are not available.
+
+**Canonical field names** — use the `columns` argument to `from_file` to map
+your file's column names to these:
 
 | model | field | description |
 |---|---|---|
 | `Zone` | `zone_id` | unique integer zone identifier |
-| `Zone` | `households` | household count |
-| `Zone` | `employment` | employee count |
+| `Zone` | `households` | household count (linear) |
+| `Zone` | `employment` | employee count (linear) |
+| `Zone` | `population` | total resident population (logit) |
+| `Zone` | `urbanization_level` | integer urbanization class (logit) |
 | `Depot` | `depot_id` | unique integer depot identifier |
 | `Depot` | `zone_id` | zone the depot is located in |
 | `Depot` | `carrier` | carrier name (must match `Carrier.name`) |
@@ -122,76 +152,15 @@ Canonical field names:
 **CLI:**
 
 ```bash
-urban-dollop generate-demand data/
+urban-dollop generate-demand data/ # linear formulation
+urban-dollop generate-demand --logit data/ # ordered logit formulation
 urban-dollop generate-demand --outdir results/ data/
 ```
 
 Reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx` (or `.gz`)
 from `data/`. Writes `parcel_demand.csv` to the current directory by default.
-
----
-
-### Parcel demand generation — ordered logit formulation
-
-For contexts where zone-level population and an urbanization classification are
-available, the HARMONY v3 ordered logit formulation can be used instead.
-
-```python
-from urban_dollop import Zone, Depot, Carrier, SkimMatrix, generate_logit_demand, LogitDemandConfig
-
-zones = Zone.from_file("zones.gpkg")   # must include population and urbanization_level columns
-depots = Depot.from_file("depots.gpkg")
-carriers = Carrier.from_file("carrier_shares.csv")
-skim = SkimMatrix.from_file("skim_time.mtx", zones)
-
-demands = generate_logit_demand(zones, depots, carriers, skim,
-    config=LogitDemandConfig(
-        beta_urbanization={1: -0.5, 2: -0.3, 3: 0.0, 4: 0.2, 5: 0.4},
-        mu_thresholds=[-1.5, 0.5, 1.5, 2.2, 2.8, 3.3, 4.2, 5.0],
-    ),
-)
-```
-
-The logit model computes expected monthly B2C parcels per person using an ordered
-logit over urbanization level, then converts to daily demand and multiplies by
-zone population. It returns the same `list[ParcelDemand]` as the linear formulation.
-
-**Zone fields required by the logit formulation:**
-
-| field | type | description |
-|---|---|---|
-| `population` | `float` | total resident population |
-| `urbanization_level` | `int` | urbanization class (arbitrary integer scale; must match keys in `beta_urbanization`) |
-
-**`LogitDemandConfig` parameters:**
-
-| parameter | type | description |
-|---|---|---|
-| `beta_urbanization` | `dict[int, float]` | linear predictor coefficient per urbanization level |
-| `mu_thresholds` | `list[float]` | ordered logit threshold vector; length must equal `len(parcel_levels) - 1` |
-| `parcel_levels` | `list[int]` | parcel count categories (default: `[0, 1, 2, 3, 4, 5, 10, 15, 20]`) |
-| `monthly_to_daily_divisor` | `float` | divides monthly expected demand to obtain daily (default: `60.0`) |
-| `calibration_target` | `float \| None` | optional aggregate scaling, same semantics as the linear formulation |
-
-Parameters are estimated from survey data. Dutch estimates from HARMONY v3
-(de Bok et al. 2025) may be used as a prior when local data are not available.
-
-**Via `urban-dollop.toml`:**
-
-```toml
-[parcel_demand_logit]
-monthly_to_daily_divisor = 60.0
-mu_thresholds = [-1.5, 0.5, 1.5, 2.2, 2.8, 3.3, 4.2, 5.0]
-# calibration_target = 50000
-
-[parcel_demand_logit.beta_urbanization]
-# TOML keys are strings; they are coerced to integers automatically
-"1" = -0.5
-"2" = -0.3
-"3" = 0.0
-"4" = 0.2
-"5" = 0.4
-```
+`--logit` reads config from the `[parcel_demand_logit]` section of `urban-dollop.toml`
+instead of `[parcel_demand]`.
 
 ---
 

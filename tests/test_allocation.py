@@ -32,6 +32,6 @@ def test_equal_shares_distribute_evenly():
 
 
 def test_indivisible_total_distributed_without_loss():
-    result = _allocate_by_share(10, [1/3, 1/3, 1/3])
+    result = _allocate_by_share(10, [1 / 3, 1 / 3, 1 / 3])
     assert sum(result) == 10
     assert all(v in (3, 4) for v in result)

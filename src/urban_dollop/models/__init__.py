@@ -7,4 +7,13 @@ from urban_dollop.models.skim_matrix import SkimMatrix
 from urban_dollop.models.vehicle import Vehicle
 from urban_dollop.models.zone import Zone
 
-__all__ = ["GeoEntity", "Zone", "Depot", "Carrier", "SkimMatrix", "ParcelDemand", "Vehicle", "DeliveryTrip"]
+__all__ = [
+    "GeoEntity",
+    "Zone",
+    "Depot",
+    "Carrier",
+    "SkimMatrix",
+    "ParcelDemand",
+    "Vehicle",
+    "DeliveryTrip",
+]

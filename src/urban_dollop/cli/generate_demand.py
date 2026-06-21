@@ -4,10 +4,12 @@ from pathlib import Path
 from urban_dollop import (
     Carrier,
     Depot,
+    LogitDemandConfig,
     ParcelDemand,
     ParcelDemandConfig,
     SkimMatrix,
     Zone,
+    generate_logit_demand,
     generate_parcel_demand,
 )
 
@@ -18,7 +20,11 @@ class CLIError(Exception):
     """Raised for user-facing CLI usage errors."""
 
 
-def run_generate_demand(input_dir: str, outdir: str | None = None) -> int:
+def run_generate_demand(
+    input_dir: str,
+    outdir: str | None = None,
+    logit: bool = False,
+) -> int:
     scenario_dir = Path(input_dir)
     if not scenario_dir.exists():
         raise CLIError(f"Input directory does not exist: {scenario_dir}")
@@ -32,7 +38,7 @@ def run_generate_demand(input_dir: str, outdir: str | None = None) -> int:
             "Run the command from the project root or place urban-dollop.toml in the current working directory."
         )
 
-    output_path = resolve_output_path(outdir)
+    output_path = _resolve_output_path(outdir)
     zones_path = require_file(scenario_dir / "zones.gpkg")
     depots_path = require_file(scenario_dir / "depots.gpkg")
     carriers_path = require_file(scenario_dir / "carrier_shares.csv")
@@ -43,14 +49,25 @@ def run_generate_demand(input_dir: str, outdir: str | None = None) -> int:
         depots = Depot.from_file(depots_path)
         carriers = Carrier.from_file(carriers_path)
         skim = SkimMatrix.from_file(skim_path, zones)
-        config = load_parcel_demand_config(config_path)
-        demands = generate_parcel_demand(
-            zones=zones,
-            depots=depots,
-            carriers=carriers,
-            skim=skim,
-            config=config,
-        )
+
+        if logit:
+            config = _load_logit_config(config_path)
+            demands = generate_logit_demand(
+                zones=zones,
+                depots=depots,
+                carriers=carriers,
+                skim=skim,
+                config=config,
+            )
+        else:
+            config = _load_linear_config(config_path)
+            demands = generate_parcel_demand(
+                zones=zones,
+                depots=depots,
+                carriers=carriers,
+                skim=skim,
+                config=config,
+            )
     except (FileNotFoundError, ValueError) as exc:
         raise CLIError(str(exc)) from exc
 
@@ -93,10 +110,18 @@ def require_skim_file(scenario_dir: Path) -> Path:
         p = scenario_dir / name
         if p.exists():
             return p
-    raise CLIError(f"Missing required input file: {scenario_dir / 'skim_time.mtx'} (or .gz)")
+    raise CLIError(
+        f"Missing required input file: {scenario_dir / 'skim_time.mtx'} (or .gz)"
+    )
 
 
-def load_parcel_demand_config(path: Path) -> ParcelDemandConfig:
+def _load_linear_config(path: Path) -> ParcelDemandConfig:
     with open(path, "rb") as f:
         data = tomllib.load(f).get("parcel_demand", {})
     return ParcelDemandConfig(**data)
+
+
+def _load_logit_config(path: Path) -> LogitDemandConfig:
+    with open(path, "rb") as f:
+        data = tomllib.load(f).get("parcel_demand_logit", {})
+    return LogitDemandConfig(**data)

@@ -16,7 +16,10 @@ from urban_dollop.parcel_demand import (
     generate_logit_demand,
     generate_parcel_demand,
 )
-from urban_dollop.parcel_scheduling import ParcelSchedulingConfig, schedule_parcel_deliveries
+from urban_dollop.parcel_scheduling import (
+    ParcelSchedulingConfig,
+    schedule_parcel_deliveries,
+)
 
 __all__ = [
     "Zone",
