@@ -10,12 +10,17 @@ class ParcelDemandConfig(BaseModel):
 
     The success rates correct for failed first-attempt deliveries so that
     the generated volume reflects shipments sent, not deliveries completed.
+
+    calibration_target, when set, scales all zone demands proportionally so
+    that the study-area total matches a known aggregate (e.g. from national
+    parcel statistics). The spatial distribution across zones is preserved.
     """
 
     parcels_per_household: float
     parcels_per_employee: float
     delivery_success_b2c: float
     delivery_success_b2b: float
+    calibration_target: float | None = None
 
     @field_validator("parcels_per_household", "parcels_per_employee")
     @classmethod
@@ -29,4 +34,11 @@ class ParcelDemandConfig(BaseModel):
     def must_be_in_unit_interval(cls, v: float) -> float:
         if not 0.0 < v <= 1.0:
             raise ValueError(f"must be in (0, 1], got {v}")
+        return v
+
+    @field_validator("calibration_target")
+    @classmethod
+    def must_be_positive(cls, v: float | None) -> float | None:
+        if v is not None and v <= 0:
+            raise ValueError(f"must be positive, got {v}")
         return v

@@ -69,3 +69,33 @@ def test_raises_for_carrier_shares_not_summing_to_one(zones, depots, carriers, s
     bad = [Carrier(name="alpha", share=0.5), Carrier(name="beta", share=0.3)]
     with pytest.raises(ValueError, match="must sum to 1.0"):
         generate_parcel_demand(zones, depots, bad, skim, demand_config)
+
+
+def test_calibration_target_scales_total(zones, depots, carriers, skim, demand_config):
+    from urban_dollop.parcel_demand.config import ParcelDemandConfig
+    config = demand_config.model_copy(update={"calibration_target": 100.0})
+    demands = generate_parcel_demand(zones, depots, carriers, skim, config)
+    total = sum(d.n_parcels for d in demands)
+    assert abs(total - 100) <= len(zones)
+
+
+def test_calibration_target_preserves_spatial_distribution(zones, depots, carriers, skim, demand_config):
+    uncalibrated = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    from urban_dollop.parcel_demand.config import ParcelDemandConfig
+    config = demand_config.model_copy(update={"calibration_target": 200.0})
+    calibrated = generate_parcel_demand(zones, depots, carriers, skim, config)
+    uncal_zones = {d.destination_zone_id for d in uncalibrated}
+    cal_zones = {d.destination_zone_id for d in calibrated}
+    assert uncal_zones == cal_zones
+
+
+def test_raises_for_non_positive_calibration_target(zones, depots, carriers, skim, demand_config):
+    from urban_dollop.parcel_demand.config import ParcelDemandConfig
+    with pytest.raises(Exception, match="positive"):
+        ParcelDemandConfig(
+            parcels_per_household=0.1,
+            parcels_per_employee=0.04,
+            delivery_success_b2c=1.0,
+            delivery_success_b2b=1.0,
+            calibration_target=0.0,
+        )

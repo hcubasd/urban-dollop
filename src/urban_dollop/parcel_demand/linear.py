@@ -14,7 +14,7 @@ from urban_dollop.models.zone import Zone
 from urban_dollop.parcel_demand.config import ParcelDemandConfig
 
 
-def generate_parcel_demand(
+def generate(
     zones: list[Zone],
     depots: list[Depot],
     carriers: list[Carrier],
@@ -33,18 +33,21 @@ def generate_parcel_demand(
 
     shares = [c.share for c in carriers]
 
+    zone_raws = [
+        zone.households * config.parcels_per_household / config.delivery_success_b2c
+        + zone.employment * config.parcels_per_employee / config.delivery_success_b2b
+        for zone in zones
+    ]
+
+    if config.calibration_target is not None:
+        raw_total = sum(zone_raws)
+        if raw_total > 0:
+            scale = config.calibration_target / raw_total
+            zone_raws = [r * scale for r in zone_raws]
+
     rows = []
-    for zone in zones:
-        total = int(
-            round(
-                zone.households
-                * config.parcels_per_household
-                / config.delivery_success_b2c
-                + zone.employment
-                * config.parcels_per_employee
-                / config.delivery_success_b2b
-            )
-        )
+    for zone, raw in zip(zones, zone_raws):
+        total = int(round(raw))
         if total == 0:
             continue
 
@@ -78,7 +81,7 @@ def generate_parcel_demand(
 
 
 def _allocate_by_share(total: int, shares: list[float]) -> list[int]:
-    """Distribute total across shares as integers using the largest-remainder method.
+    """Distribute total across shares using the largest-remainder method.
 
     Guarantees sum(result) == total, avoiding the silent parcel loss that
     occurs when independently rounding each carrier's fractional allocation.
@@ -101,7 +104,7 @@ def _resolve_config(config: ParcelDemandConfig | None) -> ParcelDemandConfig:
             toml_data = tomllib.load(f).get("parcel_demand", {})
 
     if config is not None:
-        toml_data.update(config.model_dump())
+        toml_data.update(config.model_dump(exclude_none=True))
 
     return ParcelDemandConfig(**toml_data)
 

@@ -70,7 +70,14 @@ parcels_per_household = 0.2054
 parcels_per_employee  = 0.0
 delivery_success_b2c  = 0.75
 delivery_success_b2b  = 0.95
+# calibration_target = 50000  # optional: scale total to a known daily count
 ```
+
+The rate parameters (`parcels_per_household`, `parcels_per_employee`) control
+the spatial distribution of demand across zones. `calibration_target`, when
+set, applies a proportional scaling factor so the study-area total matches a
+known aggregate — for example, a national parcel volume statistic divided by
+the number of cities. The spatial distribution is preserved.
 
 **Programmatic override:**
 
@@ -84,6 +91,7 @@ demands = generate_parcel_demand(
         parcels_per_employee=0.029,
         delivery_success_b2c=0.80,
         delivery_success_b2b=0.95,
+        calibration_target=50000,  # optional
     ),
 )
 ```

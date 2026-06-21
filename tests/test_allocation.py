@@ -1,4 +1,4 @@
-from urban_dollop.parcel_demand.generator import _allocate_by_share
+from urban_dollop.parcel_demand.linear import _allocate_by_share
 
 
 def test_sum_equals_total():
