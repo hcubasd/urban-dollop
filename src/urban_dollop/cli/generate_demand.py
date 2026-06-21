@@ -59,7 +59,7 @@ def run_generate_demand(input_dir: str, outdir: str | None = None) -> int:
     return 0
 
 
-def resolve_output_path(outdir: str | None) -> Path:
+def _resolve_output_path(outdir: str | None) -> Path:
     if outdir is None:
         return Path.cwd() / DEFAULT_OUTPUT_FILENAME
 
