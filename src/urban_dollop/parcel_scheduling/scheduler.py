@@ -38,7 +38,6 @@ def schedule_parcel_deliveries(
         List of DeliveryTrip records in (tour_id, trip_id) order.
     """
     config = _resolve_config(config)
-    rng = np.random.default_rng(config.seed)
     validate_depot_zones(depots, skim)
 
     depot_map: dict[int, Depot] = {d.depot_id: d for d in depots}
@@ -56,8 +55,8 @@ def schedule_parcel_deliveries(
     for depot_id, depot_demands in by_depot.items():
         depot = depot_map[depot_id]
 
-        # Split demands into vehicle-capacity tours
-        tours = _build_tours(depot_demands, max_capacity, rng)
+        # Split demands into vehicle-capacity tours using spatial clustering
+        tours = _cluster_demands_spatially(depot_demands, depot.zone_id, max_capacity, skim)
 
         for stop_list in tours:
             tour_id += 1
@@ -104,30 +103,64 @@ def schedule_parcel_deliveries(
     return trips
 
 
-def _build_tours(
+def _cluster_demands_spatially(
     demands: list[ParcelDemand],
+    depot_zone_id: int,
     max_capacity: int,
-    rng: np.random.Generator,
+    skim: SkimMatrix,
 ) -> list[list[ParcelDemand]]:
-    """Pack demands into tours respecting max_capacity using a greedy bin-packer."""
-    # Shuffle for randomness when seed is set; preserves reproducibility
-    order = rng.permutation(len(demands))
-    shuffled = [demands[i] for i in order]
+    """Cluster demands into capacity-constrained tours using MASS-GT spatial clustering.
 
+    Demands whose parcel count meets or exceeds max_capacity are assigned
+    dedicated full-load tours. Remaining demands are clustered iteratively:
+    the furthest unassigned demand (by travel time from the depot) seeds each
+    new cluster; the nearest unassigned demands to that seed are greedily added
+    until capacity is reached.
+    """
     tours: list[list[ParcelDemand]] = []
-    current_tour: list[ParcelDemand] = []
-    current_load = 0
+    to_cluster: list[ParcelDemand] = []
 
-    for demand in shuffled:
-        if current_load + demand.n_parcels > max_capacity and current_tour:
-            tours.append(current_tour)
-            current_tour = []
-            current_load = 0
-        current_tour.append(demand)
-        current_load += demand.n_parcels
+    for d in demands:
+        if d.n_parcels >= max_capacity:
+            tours.append([d])
+        else:
+            to_cluster.append(d)
 
-    if current_tour:
-        tours.append(current_tour)
+    if not to_cluster:
+        return tours
+
+    # Furthest-from-depot first; this order seeds each new cluster
+    to_cluster.sort(
+        key=lambda d: skim.get(depot_zone_id, d.destination_zone_id),
+        reverse=True,
+    )
+    unassigned = list(to_cluster)
+
+    while unassigned:
+        seed = unassigned.pop(0)
+        cluster = [seed]
+        load = seed.n_parcels
+
+        # Sort remaining by proximity to seed (nearest first)
+        unassigned.sort(
+            key=lambda d: skim.get(seed.destination_zone_id, d.destination_zone_id)
+        )
+
+        leftover: list[ParcelDemand] = []
+        for d in unassigned:
+            if load + d.n_parcels <= max_capacity:
+                cluster.append(d)
+                load += d.n_parcels
+            else:
+                leftover.append(d)
+
+        # Restore furthest-first ordering for the next seed selection
+        leftover.sort(
+            key=lambda d: skim.get(depot_zone_id, d.destination_zone_id),
+            reverse=True,
+        )
+        unassigned = leftover
+        tours.append(cluster)
 
     return tours
 

@@ -53,3 +53,25 @@ def test_raises_for_depot_zone_not_in_skim(zones, depots, carriers, vehicles, sk
 def test_empty_demands_produces_no_trips(zones, depots, carriers, vehicles, skim):
     trips = schedule_parcel_deliveries([], depots, vehicles, skim)
     assert trips == []
+
+
+def test_no_tour_exceeds_vehicle_capacity(zones, depots, carriers, vehicles, skim, demand_config):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    trips = schedule_parcel_deliveries(demands, depots, vehicles, skim)
+    vehicle_capacity = {v.vehicle_id: v.max_parcels for v in vehicles}
+    tour_load: dict[int, int] = {}
+    tour_vehicle: dict[int, int] = {}
+    for t in trips:
+        tour_load[t.tour_id] = tour_load.get(t.tour_id, 0) + t.n_parcels
+        tour_vehicle[t.tour_id] = t.vehicle_id
+    for tour_id, load in tour_load.items():
+        assert load <= vehicle_capacity[tour_vehicle[tour_id]]
+
+
+def test_all_stops_in_tour_share_depot(zones, depots, carriers, vehicles, skim, demand_config):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    trips = schedule_parcel_deliveries(demands, depots, vehicles, skim)
+    tour_depots: dict[int, set[int]] = {}
+    for t in trips:
+        tour_depots.setdefault(t.tour_id, set()).add(t.depot_id)
+    assert all(len(ds) == 1 for ds in tour_depots.values())
