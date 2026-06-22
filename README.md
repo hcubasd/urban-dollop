@@ -36,12 +36,18 @@ pip install urban-dollop
 
 ```mermaid
 flowchart LR
-    A[generate-demand] --> B[consolidate-uccs] --> C[consolidate-microhubs] --> D[schedule-deliveries]
+    A[generate-demand] --> B[consolidate-uccs]
+    A --> C[consolidate-microhubs]
+    A --> D[schedule-deliveries]
+    B --> C
+    B --> D
+    C --> D
 ```
 
-Each step reads and writes `parcel_demand.csv`. The consolidation steps are optional
-and composable — run either, both, or neither between demand generation and scheduling.
-All steps are configured via `urban-dollop.toml` in the working directory.
+`parcel_demand.csv` is the intermediate format between steps. The consolidation
+steps are optional and composable — run either, both, or neither between demand
+generation and scheduling. All steps are configured via `urban-dollop.toml` in
+the working directory and write output to the current directory by default.
 
 ---
 
@@ -50,8 +56,9 @@ All steps are configured via `urban-dollop.toml` in the working directory.
 ### generate-demand
 
 Estimates daily parcel delivery demand by zone and carrier. Reads zone
-socioeconomics, depot locations, carrier market shares, and a travel-time skim.
-Writes one `parcel_demand.csv` row per `(origin_zone, destination_zone, carrier)` triple.
+socioeconomics, depot locations, carrier market shares, and a travel-time skim
+matrix. Writes one `parcel_demand.csv` row per `(origin_zone, destination_zone,
+carrier)` triple.
 
 **Canonical output — `parcel_demand.csv`:**
 
@@ -67,23 +74,27 @@ Writes one `parcel_demand.csv` row per `(origin_zone, destination_zone, carrier)
 | file | field | type | description |
 |---|---|---|---|
 | `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
-| `zones.gpkg` | `households` | `float` | household count (linear formulation) |
-| `zones.gpkg` | `employment` | `float` | employee count (linear formulation) |
+| `zones.gpkg` | `households` | `float` | household count |
+| `zones.gpkg` | `employment` | `float` | employee count |
 | `depots.gpkg` | `depot_id` | `int` | unique depot identifier |
 | `depots.gpkg` | `zone_id` | `int` | zone the depot is located in |
 | `depots.gpkg` | `carrier` | `str` | carrier name |
 | `carrier_shares.csv` | `name` | `str` | carrier name |
 | `carrier_shares.csv` | `share` | `float` | market share fraction (all shares must sum to 1.0) |
 
+Also requires a `skim_time.mtx` binary skim matrix: flat float32 values, N²
+elements, one per zone pair in the order zones appear in `zones.gpkg`.
+A gzip-compressed `skim_time.mtx.gz` is also accepted.
+
 **Config — `[parcel_demand]` in `urban-dollop.toml`:**
 
 ```toml
 [parcel_demand]
-parcels_per_household = 0.178   # daily parcels generated per household
-parcels_per_employee  = 0.029   # daily parcels generated per employee
-delivery_success_b2c  = 0.80    # first-attempt delivery success rate, B2C
-delivery_success_b2b  = 0.95    # first-attempt delivery success rate, B2B
-# calibration_target = 50000    # optional: scale output to a known study-area total
+parcels_per_household = 0.178
+parcels_per_employee = 0.029
+delivery_success_b2c = 0.80
+delivery_success_b2b = 0.95
+# calibration_target = 50000
 ```
 
 All four rates are required and study-area specific — there are no defaults.
@@ -94,65 +105,22 @@ proportionally so the study-area total matches the target.
 
 ```bash
 urban-dollop generate-demand data/
-urban-dollop generate-demand --logit data/
 urban-dollop generate-demand --outdir results/ data/
 ```
 
 Reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx`
-(or `.mtx.gz`) from `data/`. Writes `parcel_demand.csv` to the current directory
-by default. Add `--logit` to use the ordered logit formulation (see below).
+from `data/`. Writes `parcel_demand.csv` to the current directory by default.
 
-If your files use different column names, pass a mapping in the API call:
-
-```python
-zones = LinearZone.from_file("zones.gpkg", columns={"zone_id": "id", "households": "hh"})
-```
-
-#### Ordered logit formulation
-
-Use `--logit` when your zone data has population and an integer urbanization
-classification instead of household and employment counts. Demand is derived from
-an ordered logit over urbanization level following the HARMONY v3 formulation.
-
-**Additional zone fields required (instead of `households` / `employment`):**
-
-| file | field | type | description |
-|---|---|---|---|
-| `zones.gpkg` | `population` | `float` | total resident population |
-| `zones.gpkg` | `urbanization_level` | `int` | integer urbanization class |
-
-A `zones.gpkg` with all five columns works for both formulations — each loads only
-what it needs.
-
-**Config — `[parcel_demand_logit]` in `urban-dollop.toml`:**
-
-```toml
-[parcel_demand_logit]
-beta_urbanization  = {1 = 2.0, 2 = 1.2, 3 = 0.4, 4 = -0.3, 5 = -1.0}
-mu_thresholds      = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
-# calibration_target      = 50000   # optional
-# monthly_to_daily_divisor = 60.0   # optional: survey-month → daily conversion
-# parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]  # optional: survey response categories
-```
-
-`beta_urbanization` and `mu_thresholds` are required and must be estimated from a
-household survey for your study area. The Dutch estimates from HARMONY v3
-(de Bok et al. 2025) are **not** appropriate defaults for other countries.
-`parcel_levels` defaults to the HARMONY v3 survey response categories
-`[0, 1, 2, 3, 4, 5, 10, 15, 20]`; override this if your survey used different
-discrete options. `monthly_to_daily_divisor` controls the conversion from
-monthly survey responses to a daily rate and defaults to `60.0`.
-
-#### Python API
+**Python API:**
 
 ```python
 from urban_dollop import LinearZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_parcel_demand, ParcelDemandConfig, ParcelDemand
 
-zones    = LinearZone.from_file("zones.gpkg")
-depots   = Depot.from_file("depots.gpkg")
+zones = LinearZone.from_file("zones.gpkg")
+depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
-skim     = SkimMatrix.from_file("skim_time.mtx", zones)
+skim = SkimMatrix.from_file("skim_time.mtx", zones)
 
 demands = generate_parcel_demand(
     zones, depots, carriers, skim,
@@ -167,23 +135,100 @@ demands = generate_parcel_demand(
 ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
 
-For the logit formulation, replace `LinearZone` with `LogitZone` and
-`generate_parcel_demand` with `generate_logit_demand` / `LogitDemandConfig`.
+Use `from_file(..., columns={...})` to map your file's column names to the
+expected field names if they differ.
+
+#### Ordered logit formulation
+
+Use `--logit` when your zone data has population and an integer urbanization
+classification instead of household and employment counts. Demand is derived
+from an ordered logit over urbanization level following the HARMONY v3
+formulation.
+
+**Canonical output:** identical to the linear formulation.
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
+| `zones.gpkg` | `population` | `float` | total resident population |
+| `zones.gpkg` | `urbanization_level` | `int` | integer urbanization class |
+| `depots.gpkg` | `depot_id` | `int` | unique depot identifier |
+| `depots.gpkg` | `zone_id` | `int` | zone the depot is located in |
+| `depots.gpkg` | `carrier` | `str` | carrier name |
+| `carrier_shares.csv` | `name` | `str` | carrier name |
+| `carrier_shares.csv` | `share` | `float` | market share fraction (all shares must sum to 1.0) |
+
+Also requires `skim_time.mtx` in the same format as the linear formulation.
+A `zones.gpkg` with all five zone columns works for both formulations — each
+loads only what it needs.
+
+**Config — `[parcel_demand_logit]` in `urban-dollop.toml`:**
+
+```toml
+[parcel_demand_logit]
+beta_urbanization = {1 = 2.0, 2 = 1.2, 3 = 0.4, 4 = -0.3, 5 = -1.0}
+mu_thresholds = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
+# calibration_target = 50000
+# monthly_to_daily_divisor = 60.0
+# parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]
+```
+
+`beta_urbanization` and `mu_thresholds` are required and must be estimated from
+a household survey for your study area. The Dutch estimates from HARMONY v3
+(de Bok et al. 2025) are **not** appropriate defaults for other countries.
+
+`parcel_levels` defaults to `[0, 1, 2, 3, 4, 5, 10, 15, 20]`, which are the
+HARMONY v3 survey response categories. Override this if your survey used
+different discrete options; an incorrect value here will silently produce wrong
+results. `monthly_to_daily_divisor` controls the conversion from monthly survey
+responses to a daily rate and defaults to `60.0`.
+
+**CLI:**
+
+```bash
+urban-dollop generate-demand --logit data/
+urban-dollop generate-demand --logit --outdir results/ data/
+```
+
+Reads the same input files as the linear formulation. Config is read from the
+`[parcel_demand_logit]` section of `urban-dollop.toml`.
+
+**Python API:**
+
+```python
+from urban_dollop import LogitZone, Depot, Carrier, SkimMatrix
+from urban_dollop import generate_logit_demand, LogitDemandConfig, ParcelDemand
+
+zones = LogitZone.from_file("zones.gpkg", columns={"population": "inwoners", "urbanization_level": "STED"})
+depots = Depot.from_file("depots.gpkg")
+carriers = Carrier.from_file("carrier_shares.csv")
+skim = SkimMatrix.from_file("skim_time.mtx", zones)
+
+demands = generate_logit_demand(
+    zones, depots, carriers, skim,
+    config=LogitDemandConfig(
+        beta_urbanization={1: 2.0, 2: 1.2, 3: 0.4, 4: -0.3, 5: -1.0},
+        mu_thresholds=[-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0],
+        calibration_target=50000,
+    ),
+)
+ParcelDemand.to_file(demands, "parcel_demand.csv")
+```
 
 ---
 
 ### consolidate-uccs
 
 Reroutes a fraction of parcels destined for UCC catchment zones through Urban
-Consolidation Centres. Each rerouted flow is split into two legs:
-leg A (origin → nearest UCC) and leg B (UCC → original destination).
-Non-catchment parcels pass through unchanged.
+Consolidation Centres. Each rerouted flow is split into two legs: leg A
+(origin → nearest UCC) and leg B (UCC → original destination). Non-catchment
+parcels pass through unchanged.
 
-The nearest UCC is selected per demand record by minimising the total two-leg
-distance: `dist(origin → UCC) + dist(UCC → destination)`.
-
-Reads `parcel_demand.csv` from the input directory. Overwrites it with the
-rerouted demand by default.
+The nearest UCC is selected per demand record by minimising total two-leg
+distance: `dist(origin → UCC) + dist(UCC → destination)`. UCCs are
+carrier-agnostic — any carrier's parcels can be rerouted through any UCC.
 
 **Canonical inputs:**
 
@@ -192,18 +237,20 @@ rerouted demand by default.
 | `uccs.csv` | `ucc_id` | `int` | unique UCC identifier |
 | `uccs.csv` | `zone_id` | `int` | zone the UCC is located in |
 | `ucc_catchment_zones.csv` | `zone_id` | `int` | zone whose inbound parcels are eligible for UCC rerouting |
-| `skim_distance.mtx` | — | `float32` | zone-to-zone travel distance matrix |
+
+Also requires a `skim_distance.mtx` binary distance skim matrix: flat float32
+values, N² elements, in zone file order. A `.mtx.gz` is also accepted.
 
 **Config — `[ucc_consolidation]` in `urban-dollop.toml`:**
 
 ```toml
 [ucc_consolidation]
-probability = 0.30   # fraction of eligible parcels rerouted through a UCC; required
+probability = 0.30
 ```
 
-`probability` is required (no default) and study-area specific. It controls
-what share of catchment-zone parcels are rerouted; the remainder continue as
-direct flows.
+`probability` is required and study-area specific. It controls the fraction of
+catchment-zone parcels rerouted through a UCC; the remainder continue as direct
+flows.
 
 **CLI:**
 
@@ -213,10 +260,10 @@ urban-dollop consolidate-uccs --outdir results/ data/
 ```
 
 Reads `zones.gpkg`, `parcel_demand.csv`, `uccs.csv`, `ucc_catchment_zones.csv`,
-and `skim_distance.mtx` (or `.mtx.gz`) from `data/`. Writes `parcel_demand.csv`
-back to `data/` by default.
+and `skim_distance.mtx` from `data/`. Writes `parcel_demand.csv` to the current
+directory by default.
 
-#### Python API
+**Python API:**
 
 ```python
 from urban_dollop import (
@@ -224,11 +271,11 @@ from urban_dollop import (
     consolidate_uccs,
 )
 
-zones           = Zone.from_file("zones.gpkg")
-demands         = ParcelDemand.from_file("parcel_demand.csv")
-uccs            = UCC.from_file("uccs.csv")
+zones = Zone.from_file("zones.gpkg")
+demands = ParcelDemand.from_file("parcel_demand.csv")
+uccs = UCC.from_file("uccs.csv")
 catchment_zones = UCCCatchmentZone.from_file("ucc_catchment_zones.csv")
-skim_distance   = SkimDistance.from_file("skim_distance.mtx", zones)
+skim_distance = SkimDistance.from_file("skim_distance.mtx", zones)
 
 result = consolidate_uccs(
     demands=demands,
@@ -253,9 +300,6 @@ The nearest microhub is carrier-specific and selected by minimising last-mile
 distance: `dist(microhub → destination)`. Every carrier with ZEZ-destined
 parcels must have at least one microhub configured.
 
-Reads `parcel_demand.csv` from the input directory. Overwrites it with the
-rerouted demand by default.
-
 **Canonical inputs:**
 
 | file | field | type | description |
@@ -264,7 +308,8 @@ rerouted demand by default.
 | `microhubs.csv` | `zone_id` | `int` | zone the microhub is located in |
 | `microhubs.csv` | `carrier` | `str` | carrier this microhub serves |
 | `zero_emission_zones.csv` | `zone_id` | `int` | zone where conventional vehicles are prohibited |
-| `skim_distance.mtx` | — | `float32` | zone-to-zone travel distance matrix |
+
+Also requires `skim_distance.mtx` in the same format as `consolidate-uccs`.
 
 This step has no config section — rerouting is 100% for all ZEZ-bound parcels.
 
@@ -276,10 +321,10 @@ urban-dollop consolidate-microhubs --outdir results/ data/
 ```
 
 Reads `zones.gpkg`, `parcel_demand.csv`, `microhubs.csv`,
-`zero_emission_zones.csv`, and `skim_distance.mtx` (or `.mtx.gz`) from `data/`.
-Writes `parcel_demand.csv` back to `data/` by default.
+`zero_emission_zones.csv`, and `skim_distance.mtx` from `data/`. Writes
+`parcel_demand.csv` to the current directory by default.
 
-#### Python API
+**Python API:**
 
 ```python
 from urban_dollop import (
@@ -287,10 +332,10 @@ from urban_dollop import (
     consolidate_microhubs,
 )
 
-zones         = Zone.from_file("zones.gpkg")
-demands       = ParcelDemand.from_file("parcel_demand.csv")
-microhubs     = Microhub.from_file("microhubs.csv")
-zez_zones     = ZeroEmissionZone.from_file("zero_emission_zones.csv")
+zones = Zone.from_file("zones.gpkg")
+demands = ParcelDemand.from_file("parcel_demand.csv")
+microhubs = Microhub.from_file("microhubs.csv")
+zez_zones = ZeroEmissionZone.from_file("zero_emission_zones.csv")
 skim_distance = SkimDistance.from_file("skim_distance.mtx", zones)
 
 result = consolidate_microhubs(
@@ -330,14 +375,17 @@ Returns one row per tour leg.
 | `vehicles.csv` | `name` | `str` | vehicle type label |
 | `vehicles.csv` | `max_parcels` | `int` | maximum parcel capacity |
 
+Also requires `skim_time.mtx` in the same format as `generate-demand`.
 The scheduler assigns the smallest vehicle whose capacity fits the tour load.
 
 **Config — `[parcel_scheduling]` in `urban-dollop.toml`:**
 
 ```toml
 [parcel_scheduling]
-# seed = 42   # optional: fix RNG seed for reproducible tour clustering
+# seed = 42
 ```
+
+`seed` is optional; set it to make tour clustering reproducible.
 
 **CLI:**
 
@@ -346,11 +394,10 @@ urban-dollop schedule-deliveries data/
 urban-dollop schedule-deliveries --outdir results/ data/
 ```
 
-Reads `zones.gpkg`, `vehicles.csv`, `skim_time.mtx` (or `.mtx.gz`), and
-`parcel_demand.csv` from `data/`. Writes `delivery_trips.csv` to the current
-directory by default.
+Reads `zones.gpkg`, `vehicles.csv`, `skim_time.mtx`, and `parcel_demand.csv`
+from `data/`. Writes `delivery_trips.csv` to the current directory by default.
 
-#### Python API
+**Python API:**
 
 ```python
 from urban_dollop import (
@@ -358,10 +405,10 @@ from urban_dollop import (
     schedule_parcel_deliveries, ParcelSchedulingConfig, DeliveryTrip,
 )
 
-zones    = Zone.from_file("zones.gpkg")
+zones = Zone.from_file("zones.gpkg")
 vehicles = Vehicle.from_file("vehicles.csv")
-skim     = SkimMatrix.from_file("skim_time.mtx", zones)
-demands  = ParcelDemand.from_file("parcel_demand.csv")
+skim = SkimMatrix.from_file("skim_time.mtx", zones)
+demands = ParcelDemand.from_file("parcel_demand.csv")
 
 trips = schedule_parcel_deliveries(
     demands=demands,

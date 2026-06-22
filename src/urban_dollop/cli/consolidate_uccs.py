@@ -29,7 +29,7 @@ def run_consolidate_uccs(input_dir: str, outdir: str | None = None) -> int:
             "Run the command from the project root or place urban-dollop.toml in the current working directory."
         )
 
-    output_path = _resolve_output_path(scenario_dir, outdir)
+    output_path = _resolve_output_path(outdir)
     zones_path = require_file(scenario_dir / "zones.gpkg")
     demand_path = require_file(scenario_dir / "parcel_demand.csv")
     uccs_path = require_file(scenario_dir / "uccs.csv")
@@ -58,9 +58,9 @@ def run_consolidate_uccs(input_dir: str, outdir: str | None = None) -> int:
     return 0
 
 
-def _resolve_output_path(scenario_dir: Path, outdir: str | None) -> Path:
+def _resolve_output_path(outdir: str | None) -> Path:
     if outdir is None:
-        return scenario_dir / DEFAULT_OUTPUT_FILENAME
+        return Path.cwd() / DEFAULT_OUTPUT_FILENAME
 
     path = Path(outdir)
     if path.exists():
