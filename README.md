@@ -134,26 +134,29 @@ urbanization level following the HARMONY v3 formulation.
 
 The model computes an expected number of B2C parcels per person per month:
 
-```
-P(parcels ≤ level_k | zone z) = 1 / (1 + exp(η_z − μ_k))
-η_z = beta_urbanization[zone.urbanization_level]
-```
+$$P(X \leq p_k \mid z) = \frac{1}{1 + e^{\,\eta_z - \mu_k}}, \qquad \eta_z = \beta_{\text{urb}(z)}$$
 
-`mu_thresholds` are the ordered cut-points on the latent utility scale, one per
-boundary between adjacent parcel levels. `parcel_levels` defines those discrete
-counts — the default `[0, 1, 2, 3, 4, 5, 10, 15, 20]` matches the HARMONY v3
-survey response categories, but you can supply a different list if your survey
-used different options. `len(mu_thresholds)` must equal `len(parcel_levels) - 1`.
-Expected monthly parcels per person are multiplied by zone population and divided
-by `monthly_to_daily_divisor` (default 60) to get daily demand.
+`mu_thresholds` are the ordered cut-points $\mu_k$, one per boundary between adjacent
+parcel levels. `parcel_levels` defines those discrete counts $p_k$ — the default
+`[0, 1, 2, 3, 4, 5, 10, 15, 20]` matches the HARMONY v3 survey response categories,
+but you can supply a different list if your survey used different options.
+`len(mu_thresholds)` must equal `len(parcel_levels) - 1`. Expected monthly parcels per
+person are multiplied by zone population and divided by `monthly_to_daily_divisor`
+(default 60) to get daily demand.
 
-Your zone file needs two additional fields beyond what the linear formulation
-requires: `population` and `urbanization_level`. Use `columns=` if your file uses
-different names:
+The logit formulation only requires `zone_id`, `population`, and `urbanization_level`
+from the zone file — `households` and `employment` are not needed and do not have to
+be present. Use `columns=` to map your file's column names:
+
+| file | field | type | description |
+|---|---|---|---|
+| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
+| `zones.gpkg` | `population` | `float` | total resident population |
+| `zones.gpkg` | `urbanization_level` | `int` | integer urbanization class |
 
 ```python
 from urban_dollop import Zone, Depot, Carrier, SkimMatrix
-from urban_dollop import generate_logit_demand, LogitDemandConfig
+from urban_dollop import generate_logit_demand, LogitDemandConfig, ParcelDemand
 
 zones = Zone.from_file("zones.gpkg", columns={
     "population": "inwoners",

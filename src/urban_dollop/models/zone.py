@@ -20,8 +20,8 @@ class Zone(BaseModel):
     """
 
     zone_id: int
-    households: float
-    employment: float
+    households: float | None = None
+    employment: float | None = None
     population: float | None = None
     urbanization_level: int | None = None
 

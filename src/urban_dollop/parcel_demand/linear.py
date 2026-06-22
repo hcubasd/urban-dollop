@@ -24,6 +24,7 @@ def generate(
     config = _resolve_config(config)
     _validate_carrier_shares(carriers)
     validate_depot_zones(depots, skim)
+    _validate_zone_fields(zones)
 
     depots_by_carrier: dict[str, list[Depot]] = {}
     for d in depots:
@@ -78,6 +79,18 @@ def generate(
     ].sum()
 
     return [ParcelDemand(**row) for row in df.to_dict("records")]
+
+
+def _validate_zone_fields(zones: list[Zone]) -> None:
+    for z in zones:
+        if z.households is None:
+            raise ValueError(
+                f"Zone {z.zone_id}: households is required for linear demand generation."
+            )
+        if z.employment is None:
+            raise ValueError(
+                f"Zone {z.zone_id}: employment is required for linear demand generation."
+            )
 
 
 def _allocate_by_share(total: int, shares: list[float]) -> list[int]:
