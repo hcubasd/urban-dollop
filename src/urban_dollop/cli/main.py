@@ -1,6 +1,8 @@
 import argparse
 import sys
 
+from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
+from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
 from urban_dollop.cli.schedule_deliveries import run_schedule_deliveries
 
@@ -49,6 +51,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     schedule_deliveries.set_defaults(
         handler=lambda args: run_schedule_deliveries(args.input_dir, args.outdir)
+    )
+
+    consolidate_microhubs_cmd = subparsers.add_parser(
+        "consolidate-microhubs",
+        help="Reroute zero-emission-zone parcels through microhubs. Overwrites parcel_demand.csv in the input directory by default.",
+    )
+    consolidate_microhubs_cmd.add_argument(
+        "input_dir",
+        help="Directory containing zones.gpkg, parcel_demand.csv, microhubs.csv, zero_emission_zones.csv, and skim_distance.mtx.",
+    )
+    consolidate_microhubs_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the input directory.",
+    )
+    consolidate_microhubs_cmd.set_defaults(
+        handler=lambda args: run_consolidate_microhubs(args.input_dir, args.outdir)
+    )
+
+    consolidate_uccs_cmd = subparsers.add_parser(
+        "consolidate-uccs",
+        help="Reroute catchment-zone parcels through Urban Consolidation Centres. Overwrites parcel_demand.csv in the input directory by default.",
+    )
+    consolidate_uccs_cmd.add_argument(
+        "input_dir",
+        help="Directory containing zones.gpkg, parcel_demand.csv, uccs.csv, ucc_catchment_zones.csv, and skim_distance.mtx.",
+    )
+    consolidate_uccs_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the input directory.",
+    )
+    consolidate_uccs_cmd.set_defaults(
+        handler=lambda args: run_consolidate_uccs(args.input_dir, args.outdir)
     )
 
     return parser

@@ -7,15 +7,19 @@ from pydantic import BaseModel
 class ParcelDemand(BaseModel):
     """An aggregated parcel demand flow — one row of the demand generator output.
 
-    Represents the total number of parcels moving from a depot to a
-    destination zone. Produced by generate_parcel_demand() and consumed
-    by the parcel scheduling module, which assigns vehicle types.
+    Represents the total number of parcels moving from an origin zone to a
+    destination zone, operated by a given carrier. Produced by
+    generate_parcel_demand() and generate_logit_demand(), consumed by the
+    consolidation and scheduling modules.
 
-    The origin zone is implicit: it is always the zone of the depot.
+    For direct flows (no consolidation) the origin zone is always the zone
+    of the nearest depot. Consolidation modules may produce records where
+    the origin is a microhub or UCC zone.
     """
 
+    origin_zone_id: int
     destination_zone_id: int
-    depot_id: int
+    carrier: str
     n_parcels: int
 
     @classmethod

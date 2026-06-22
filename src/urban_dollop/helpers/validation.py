@@ -11,3 +11,13 @@ def validate_depot_zones(depots: list[Depot], skim: SkimMatrix) -> None:
             f"Depot(s) {ids} have zone_id(s) {zones} not present in the skim matrix. "
             "Add these zones to your zones file or remove the depots."
         )
+
+
+def validate_origin_zones(demands: list, skim: SkimMatrix) -> None:
+    missing = sorted({d.origin_zone_id for d in demands if d.origin_zone_id not in skim._pos})
+    if missing:
+        zones = ", ".join(str(z) for z in missing)
+        raise ValueError(
+            f"Origin zone(s) {zones} not present in the skim matrix. "
+            "Check your parcel demand file or skim matrix."
+        )

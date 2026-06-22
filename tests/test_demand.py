@@ -32,10 +32,10 @@ def test_all_destination_zones_are_input_zones(
     assert all(d.destination_zone_id in valid_ids for d in demands)
 
 
-def test_all_depot_ids_are_input_depots(zones, depots, carriers, skim, demand_config):
-    valid_ids = {d.depot_id for d in depots}
+def test_all_origin_zones_are_depot_zones(zones, depots, carriers, skim, demand_config):
+    valid_zone_ids = {d.zone_id for d in depots}
     demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
-    assert all(d.depot_id in valid_ids for d in demands)
+    assert all(d.origin_zone_id in valid_zone_ids for d in demands)
 
 
 def test_no_zero_parcel_rows(zones, depots, carriers, skim, demand_config):
@@ -149,12 +149,12 @@ def test_logit_all_destination_zones_are_input_zones(
     assert all(d.destination_zone_id in valid_ids for d in demands)
 
 
-def test_logit_all_depot_ids_are_input_depots(
+def test_logit_all_origin_zones_are_depot_zones(
     logit_zones, depots, carriers, skim, logit_config
 ):
-    valid_ids = {d.depot_id for d in depots}
+    valid_zone_ids = {d.zone_id for d in depots}
     demands = generate_logit_demand(logit_zones, depots, carriers, skim, logit_config)
-    assert all(d.depot_id in valid_ids for d in demands)
+    assert all(d.origin_zone_id in valid_zone_ids for d in demands)
 
 
 def test_logit_calibration_target_scales_total(

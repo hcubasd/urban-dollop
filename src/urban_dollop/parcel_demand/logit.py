@@ -60,12 +60,13 @@ def generate(
 
             carrier_depots = depots_by_carrier[carrier.name]
             times = [skim.get(d.zone_id, zone.zone_id) for d in carrier_depots]
-            nearest_depot_id = carrier_depots[int(np.argmin(times))].depot_id
+            nearest_depot = carrier_depots[int(np.argmin(times))]
 
             rows.append(
                 {
+                    "origin_zone_id": nearest_depot.zone_id,
                     "destination_zone_id": zone.zone_id,
-                    "depot_id": nearest_depot_id,
+                    "carrier": carrier.name,
                     "n_parcels": n,
                 }
             )
@@ -74,7 +75,7 @@ def generate(
         return []
 
     df = pd.DataFrame(rows)
-    df = df.groupby(["destination_zone_id", "depot_id"], as_index=False)[
+    df = df.groupby(["origin_zone_id", "destination_zone_id", "carrier"], as_index=False)[
         "n_parcels"
     ].sum()
     return [ParcelDemand(**row) for row in df.to_dict("records")]

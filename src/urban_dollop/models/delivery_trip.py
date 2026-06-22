@@ -6,9 +6,10 @@ from pydantic import BaseModel
 class DeliveryTrip(BaseModel):
     """A single trip leg within a delivery tour.
 
-    One record per (depot → stop) or (stop → stop) movement. Multiple
+    One record per (origin → stop) or (stop → stop) movement. Multiple
     DeliveryTrip records share a tour_id; trip_id is the sequential
-    position of this leg within that tour.
+    position of this leg within that tour. The final leg returns to the
+    tour origin (n_parcels == 0).
 
     Produced by schedule_parcel_deliveries() and consumed by the
     traffic assignment module.
@@ -16,7 +17,6 @@ class DeliveryTrip(BaseModel):
 
     tour_id: int
     trip_id: int
-    depot_id: int
     carrier: str
     origin_zone_id: int
     destination_zone_id: int
