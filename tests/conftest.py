@@ -3,9 +3,10 @@ import pytest
 
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.depot import Depot
+from urban_dollop.models.linear_zone import LinearZone
+from urban_dollop.models.logit_zone import LogitZone
 from urban_dollop.models.skim_matrix import SkimMatrix
 from urban_dollop.models.vehicle import Vehicle
-from urban_dollop.models.zone import Zone
 from urban_dollop.parcel_demand.config import ParcelDemandConfig
 from urban_dollop.parcel_demand.logit_config import LogitDemandConfig
 
@@ -13,10 +14,10 @@ from urban_dollop.parcel_demand.logit_config import LogitDemandConfig
 @pytest.fixture
 def zones():
     return [
-        Zone(zone_id=1, households=100, employment=50),
-        Zone(zone_id=2, households=200, employment=0),
-        Zone(zone_id=3, households=0, employment=150),
-        Zone(zone_id=4, households=50, employment=25),
+        LinearZone(zone_id=1, households=100, employment=50),
+        LinearZone(zone_id=2, households=200, employment=0),
+        LinearZone(zone_id=3, households=0, employment=150),
+        LinearZone(zone_id=4, households=50, employment=25),
     ]
 
 
@@ -86,30 +87,10 @@ def demand_config():
 @pytest.fixture
 def logit_zones():
     return [
-        Zone(
-            zone_id=1,
-            households=100,
-            employment=50,
-            population=250,
-            urbanization_level=1,
-        ),
-        Zone(
-            zone_id=2,
-            households=200,
-            employment=0,
-            population=500,
-            urbanization_level=2,
-        ),
-        Zone(
-            zone_id=3, households=0, employment=150, population=80, urbanization_level=1
-        ),
-        Zone(
-            zone_id=4,
-            households=50,
-            employment=25,
-            population=120,
-            urbanization_level=2,
-        ),
+        LogitZone(zone_id=1, population=250, urbanization_level=1),
+        LogitZone(zone_id=2, population=500, urbanization_level=2),
+        LogitZone(zone_id=3, population=80, urbanization_level=1),
+        LogitZone(zone_id=4, population=120, urbanization_level=2),
     ]
 
 

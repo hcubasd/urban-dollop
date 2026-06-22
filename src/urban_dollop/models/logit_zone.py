@@ -1,21 +1,20 @@
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel
-
 from urban_dollop.helpers.read_csv import read_csv
 from urban_dollop.helpers.read_gpkg import read_gpkg
+from urban_dollop.models.zone import Zone
 
 
-class Zone(BaseModel):
-    """A traffic analysis zone identified by its integer zone_id.
+class LogitZone(Zone):
+    """A zone with the socioeconomic attributes required by the ordered logit demand formulation.
 
-    Used by SkimMatrix and the scheduling CLI where only spatial identity
-    is needed. For demand generation use LinearZone or LogitZone, which
-    carry the socioeconomic attributes required by each formulation.
+    Required by generate_logit_demand. Population and an integer urbanization
+    classification are widely available from national statistics offices.
     """
 
-    zone_id: int
+    population: float
+    urbanization_level: int
 
     @classmethod
     def from_file(cls, path: str | Path, columns: dict[str, str] = {}) -> list[Self]:

@@ -53,10 +53,10 @@ Use `generate_parcel_demand` when your zone data has household and employment
 counts. Demand is a linear rate applied per household and per employee.
 
 ```python
-from urban_dollop import Zone, Depot, Carrier, SkimMatrix
+from urban_dollop import LinearZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_parcel_demand, ParcelDemandConfig, ParcelDemand
 
-zones = Zone.from_file("zones.gpkg")
+zones = LinearZone.from_file("zones.gpkg")
 depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
 skim = SkimMatrix.from_file("skim_time.mtx", zones)
@@ -81,7 +81,7 @@ ParcelDemand.to_file(demands, "parcel_demand.csv")
 If your files use different column names, pass a mapping:
 
 ```python
-zones = Zone.from_file("zones.gpkg", columns={"zone_id": "id", "households": "hh"})
+zones = LinearZone.from_file("zones.gpkg", columns={"zone_id": "id", "households": "hh"})
 ```
 
 Configure via `urban-dollop.toml`:
@@ -144,9 +144,10 @@ but you can supply a different list if your survey used different options.
 person are multiplied by zone population and divided by `monthly_to_daily_divisor`
 (default 60) to get daily demand.
 
-The logit formulation only requires `zone_id`, `population`, and `urbanization_level`
-from the zone file — `households` and `employment` are not needed and do not have to
-be present. Use `columns=` to map your file's column names:
+The logit formulation requires `zone_id`, `population`, and `urbanization_level`
+from the zone file. `households` and `employment` are not needed. A `zones.gpkg`
+with all five columns works for both formulations — each loads only what it needs.
+Use `columns=` to map your file's column names:
 
 | file | field | type | description |
 |---|---|---|---|
@@ -155,10 +156,10 @@ be present. Use `columns=` to map your file's column names:
 | `zones.gpkg` | `urbanization_level` | `int` | integer urbanization class |
 
 ```python
-from urban_dollop import Zone, Depot, Carrier, SkimMatrix
+from urban_dollop import LogitZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_logit_demand, LogitDemandConfig, ParcelDemand
 
-zones = Zone.from_file("zones.gpkg", columns={
+zones = LogitZone.from_file("zones.gpkg", columns={
     "population": "inwoners",
     "urbanization_level": "STED",
 })

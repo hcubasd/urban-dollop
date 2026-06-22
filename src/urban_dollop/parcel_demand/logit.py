@@ -8,9 +8,9 @@ import pandas as pd
 from urban_dollop.helpers.validation import validate_depot_zones
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.depot import Depot
+from urban_dollop.models.logit_zone import LogitZone
 from urban_dollop.models.parcel_demand import ParcelDemand
 from urban_dollop.models.skim_matrix import SkimMatrix
-from urban_dollop.models.zone import Zone
 from urban_dollop.parcel_demand.linear import (
     _allocate_by_share,
     _validate_carrier_depots,
@@ -20,7 +20,7 @@ from urban_dollop.parcel_demand.logit_config import LogitDemandConfig
 
 
 def generate(
-    zones: list[Zone],
+    zones: list[LogitZone],
     depots: list[Depot],
     carriers: list[Carrier],
     skim: SkimMatrix,
@@ -29,7 +29,6 @@ def generate(
     config = _resolve_config(config)
     _validate_carrier_shares(carriers)
     validate_depot_zones(depots, skim)
-    _validate_zone_fields(zones)
 
     depots_by_carrier: dict[str, list[Depot]] = {}
     for d in depots:
@@ -81,7 +80,7 @@ def generate(
     return [ParcelDemand(**row) for row in df.to_dict("records")]
 
 
-def _zone_daily_demand(zone: Zone, config: LogitDemandConfig) -> float:
+def _zone_daily_demand(zone: LogitZone, config: LogitDemandConfig) -> float:
     eta = config.beta_urbanization.get(zone.urbanization_level, 0.0)
 
     # Cumulative probabilities: P(X <= p) = sigmoid(mu_p - eta)
@@ -96,18 +95,6 @@ def _zone_daily_demand(zone: Zone, config: LogitDemandConfig) -> float:
     # Expected parcels per person (monthly), then convert to daily
     expected_monthly_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
     return expected_monthly_pp / config.monthly_to_daily_divisor * zone.population
-
-
-def _validate_zone_fields(zones: list[Zone]) -> None:
-    for z in zones:
-        if z.population is None:
-            raise ValueError(
-                f"Zone {z.zone_id}: population is required for logit demand generation."
-            )
-        if z.urbanization_level is None:
-            raise ValueError(
-                f"Zone {z.zone_id}: urbanization_level is required for logit demand generation."
-            )
 
 
 def _resolve_config(config: LogitDemandConfig | None) -> LogitDemandConfig:

@@ -4,7 +4,9 @@ from pathlib import Path
 from urban_dollop import (
     Carrier,
     Depot,
+    LinearZone,
     LogitDemandConfig,
+    LogitZone,
     ParcelDemand,
     ParcelDemandConfig,
     SkimMatrix,
@@ -45,12 +47,12 @@ def run_generate_demand(
     skim_path = require_skim_file(scenario_dir)
 
     try:
-        zones = Zone.from_file(zones_path)
         depots = Depot.from_file(depots_path)
         carriers = Carrier.from_file(carriers_path)
-        skim = SkimMatrix.from_file(skim_path, zones)
 
         if logit:
+            zones = LogitZone.from_file(zones_path)
+            skim = SkimMatrix.from_file(skim_path, zones)
             config = _load_logit_config(config_path)
             demands = generate_logit_demand(
                 zones=zones,
@@ -60,6 +62,8 @@ def run_generate_demand(
                 config=config,
             )
         else:
+            zones = LinearZone.from_file(zones_path)
+            skim = SkimMatrix.from_file(skim_path, zones)
             config = _load_linear_config(config_path)
             demands = generate_parcel_demand(
                 zones=zones,

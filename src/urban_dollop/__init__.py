@@ -5,6 +5,8 @@ from urban_dollop.models import (
     DeliveryTrip,
     Depot,
     GeoEntity,
+    LinearZone,
+    LogitZone,
     ParcelDemand,
     SkimMatrix,
     Vehicle,
@@ -23,6 +25,8 @@ from urban_dollop.parcel_scheduling import (
 
 __all__ = [
     "Zone",
+    "LinearZone",
+    "LogitZone",
     "Depot",
     "Carrier",
     "SkimMatrix",

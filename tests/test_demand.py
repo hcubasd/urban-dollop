@@ -3,7 +3,7 @@ import pytest
 from urban_dollop import generate_logit_demand, generate_parcel_demand
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.depot import Depot
-from urban_dollop.models.zone import Zone
+from urban_dollop.models.logit_zone import LogitZone
 from urban_dollop.parcel_demand.logit_config import LogitDemandConfig
 
 
@@ -166,28 +166,6 @@ def test_logit_calibration_target_scales_total(
     assert abs(total - 100) <= len(logit_zones)
 
 
-def test_logit_raises_for_missing_population(
-    logit_zones, depots, carriers, skim, logit_config
-):
-    bad_zones = [
-        z.model_copy(update={"population": None}) if z.zone_id == 1 else z
-        for z in logit_zones
-    ]
-    with pytest.raises(ValueError, match="population"):
-        generate_logit_demand(bad_zones, depots, carriers, skim, logit_config)
-
-
-def test_logit_raises_for_missing_urbanization_level(
-    logit_zones, depots, carriers, skim, logit_config
-):
-    bad_zones = [
-        z.model_copy(update={"urbanization_level": None}) if z.zone_id == 1 else z
-        for z in logit_zones
-    ]
-    with pytest.raises(ValueError, match="urbanization_level"):
-        generate_logit_demand(bad_zones, depots, carriers, skim, logit_config)
-
-
 def test_logit_config_raises_for_wrong_mu_length():
     with pytest.raises(Exception, match="mu_thresholds"):
         LogitDemandConfig(
@@ -198,15 +176,11 @@ def test_logit_config_raises_for_wrong_mu_length():
 
 def test_logit_higher_urbanization_produces_more_demand(depots, carriers, skim):
     low_urb = [
-        Zone(
-            zone_id=i, households=0, employment=0, population=100, urbanization_level=1
-        )
+        LogitZone(zone_id=i, population=100, urbanization_level=1)
         for i in range(1, 5)
     ]
     high_urb = [
-        Zone(
-            zone_id=i, households=0, employment=0, population=100, urbanization_level=2
-        )
+        LogitZone(zone_id=i, population=100, urbanization_level=2)
         for i in range(1, 5)
     ]
     config = LogitDemandConfig(
