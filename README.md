@@ -134,7 +134,7 @@ urbanization level following the HARMONY v3 formulation.
 
 The model computes an expected number of B2C parcels per person per month:
 
-$$P(X \leq p_k \mid z) = \frac{1}{1 + e^{\,\eta_z - \mu_k}}, \qquad \eta_z = \beta_{\text{urb}(z)}$$
+$$P(X \leq p_k \mid z) = \frac{1}{1 + e^{\eta_z - \mu_k}}, \qquad \eta_z = \beta_{\text{urb}(z)}$$
 
 `mu_thresholds` are the ordered cut-points $\mu_k$, one per boundary between adjacent
 parcel levels. `parcel_levels` defines those discrete counts $p_k$ — the default
