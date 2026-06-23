@@ -2,8 +2,10 @@
 
 urban-dollop is a Python library for urban freight simulation. It generalizes
 [MASS-GT](https://github.com/orgs/mass-gt/repositories) — a multi-agent freight
-simulation system developed at TU Delft — separating reusable model structure from
-study-area-specific parameters so the same pipeline can be applied to any city.
+simulation system developed at TU Delft — covering demand generation, consolidation
+routing, delivery scheduling, network assignment, and emission calculation including
+road grade effects. It separates reusable model structure from study-area-specific
+parameters so the same pipeline can be applied to any city.
 
 ---
 
@@ -44,10 +46,10 @@ flowchart LR
     C --> D
 ```
 
-`parcel_demand.csv` is the intermediate format between steps. The consolidation
-steps are optional and composable — run either, both, or neither between demand
-generation and scheduling. All steps are configured via `urban-dollop.toml` in
-the working directory and write output to the current directory by default.
+The consolidation steps are optional and composable — run either, both, or
+neither between demand generation and scheduling. All steps read inputs from a
+required directory argument and write output to the current directory by default.
+All steps are configured via `urban-dollop.toml` in the working directory.
 
 ---
 
@@ -117,7 +119,7 @@ from `data/`. Writes `parcel_demand.csv` to the current directory by default.
 from urban_dollop import LinearZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_parcel_demand, ParcelDemandConfig, ParcelDemand
 
-zones = LinearZone.from_file("zones.gpkg")
+zones = LinearZone.from_file("zones.gpkg", columns={"zone_id": "id", "households": "hh", "employment": "emp"})
 depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
 skim = SkimMatrix.from_file("skim_time.mtx", zones)
@@ -135,36 +137,29 @@ demands = generate_parcel_demand(
 ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
 
-Use `from_file(..., columns={...})` to map your file's column names to the
-expected field names if they differ.
+All `from_file` calls accept a `columns` mapping to translate your file's column
+names to the expected field names. All other API calls support it the same way.
 
 #### Ordered logit formulation
 
 Use `--logit` when your zone data has population and an integer urbanization
 classification instead of household and employment counts. Demand is derived
 from an ordered logit over urbanization level following the HARMONY v3
-formulation.
+formulation. All inputs, outputs, and config options are identical to the linear
+formulation except for the following.
 
-**Canonical output:** identical to the linear formulation.
+Zone attributes required (instead of `households` and `employment`):
 
-**Canonical inputs:**
+| field | type | description |
+|---|---|---|
+| `population` | `float` | total resident population |
+| `urbanization_level` | `int` | integer urbanization class |
 
-| file | field | type | description |
-|---|---|---|---|
-| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
-| `zones.gpkg` | `population` | `float` | total resident population |
-| `zones.gpkg` | `urbanization_level` | `int` | integer urbanization class |
-| `depots.gpkg` | `depot_id` | `int` | unique depot identifier |
-| `depots.gpkg` | `zone_id` | `int` | zone the depot is located in |
-| `depots.gpkg` | `carrier` | `str` | carrier name |
-| `carrier_shares.csv` | `name` | `str` | carrier name |
-| `carrier_shares.csv` | `share` | `float` | market share fraction (all shares must sum to 1.0) |
+A `zones.gpkg` with all five columns works for both formulations — each loads
+only what it needs.
 
-Also requires `skim_time.mtx` in the same format as the linear formulation.
-A `zones.gpkg` with all five zone columns works for both formulations — each
-loads only what it needs.
-
-**Config — `[parcel_demand_logit]` in `urban-dollop.toml`:**
+Config uses a separate section — `[parcel_demand_logit]` instead of
+`[parcel_demand]`:
 
 ```toml
 [parcel_demand_logit]
@@ -179,21 +174,18 @@ mu_thresholds = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
 a household survey for your study area. The Dutch estimates from HARMONY v3
 (de Bok et al. 2025) are **not** appropriate defaults for other countries.
 
-`parcel_levels` defaults to `[0, 1, 2, 3, 4, 5, 10, 15, 20]`, which are the
-HARMONY v3 survey response categories. Override this if your survey used
-different discrete options; an incorrect value here will silently produce wrong
-results. `monthly_to_daily_divisor` controls the conversion from monthly survey
-responses to a daily rate and defaults to `60.0`.
+`parcel_levels` defaults to `[0, 1, 2, 3, 4, 5, 10, 15, 20]`, the HARMONY v3
+survey response categories. Override this if your survey used different discrete
+options; a wrong value here silently produces wrong results.
+`monthly_to_daily_divisor` converts monthly survey responses to a daily rate and
+defaults to `60.0`.
 
-**CLI:**
+Add `--logit` to the CLI command; everything else is identical:
 
 ```bash
 urban-dollop generate-demand --logit data/
 urban-dollop generate-demand --logit --outdir results/ data/
 ```
-
-Reads the same input files as the linear formulation. Config is read from the
-`[parcel_demand_logit]` section of `urban-dollop.toml`.
 
 **Python API:**
 
@@ -201,7 +193,7 @@ Reads the same input files as the linear formulation. Config is read from the
 from urban_dollop import LogitZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_logit_demand, LogitDemandConfig, ParcelDemand
 
-zones = LogitZone.from_file("zones.gpkg", columns={"population": "inwoners", "urbanization_level": "STED"})
+zones = LogitZone.from_file("zones.gpkg")
 depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
 skim = SkimMatrix.from_file("skim_time.mtx", zones)
