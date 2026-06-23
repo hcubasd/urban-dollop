@@ -5,12 +5,12 @@ from urban_dollop import (
     DeliveryTrip,
     ParcelDemand,
     ParcelSchedulingConfig,
-    SkimMatrix,
+    SkimDistance,
     Vehicle,
     Zone,
     schedule_parcel_deliveries,
 )
-from urban_dollop.cli.generate_demand import CLIError, require_file, require_skim_file
+from urban_dollop.cli.generate_demand import CLIError, require_file
 
 DEFAULT_OUTPUT_FILENAME = "delivery_trips.csv"
 
@@ -32,19 +32,20 @@ def run_schedule_deliveries(input_dir: str, outdir: str | None = None) -> int:
     output_path = _resolve_output_path(outdir)
     zones_path = require_file(scenario_dir / "zones.gpkg")
     vehicles_path = require_file(scenario_dir / "vehicles.csv")
-    skim_time_path = require_skim_file(scenario_dir)
+    skim_dist_path = _require_skim_distance_file(scenario_dir)
     demand_path = require_file(scenario_dir / "parcel_demand.csv")
 
     try:
         zones = Zone.from_file(zones_path)
         vehicles = Vehicle.from_file(vehicles_path)
-        skim = SkimMatrix.from_file(skim_time_path, zones)
+        skim_distance = SkimDistance.from_file(skim_dist_path, zones)
         demands = ParcelDemand.from_file(demand_path)
         config = _load_scheduling_config(config_path)
         trips = schedule_parcel_deliveries(
             demands=demands,
             vehicles=vehicles,
-            skim=skim,
+            skim_distance=skim_distance,
+            zones=zones,
             config=config,
         )
     except (FileNotFoundError, ValueError) as exc:
@@ -73,6 +74,16 @@ def _resolve_output_path(outdir: str | None) -> Path:
     raise CLIError(
         f"Output path does not exist: {path}. "
         "Pass an existing directory or a .csv file path whose parent directory already exists."
+    )
+
+
+def _require_skim_distance_file(scenario_dir: Path) -> Path:
+    for name in ("skim_distance.mtx", "skim_distance.mtx.gz"):
+        p = scenario_dir / name
+        if p.exists():
+            return p
+    raise CLIError(
+        f"Missing required input file: {scenario_dir / 'skim_distance.mtx'} (or .gz)"
     )
 
 

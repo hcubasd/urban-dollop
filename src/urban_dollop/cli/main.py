@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     consolidate_microhubs_cmd = subparsers.add_parser(
         "consolidate-microhubs",
-        help="Reroute zero-emission-zone parcels through microhubs. Overwrites parcel_demand.csv in the input directory by default.",
+        help="Reroute zero-emission-zone parcels through microhubs.",
     )
     consolidate_microhubs_cmd.add_argument(
         "input_dir",
@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     consolidate_microhubs_cmd.add_argument(
         "--outdir",
-        help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the input directory.",
+        help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the current working directory.",
     )
     consolidate_microhubs_cmd.set_defaults(
         handler=lambda args: run_consolidate_microhubs(args.input_dir, args.outdir)
@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     consolidate_uccs_cmd = subparsers.add_parser(
         "consolidate-uccs",
-        help="Reroute catchment-zone parcels through Urban Consolidation Centres. Overwrites parcel_demand.csv in the input directory by default.",
+        help="Reroute catchment-zone parcels through Urban Consolidation Centres.",
     )
     consolidate_uccs_cmd.add_argument(
         "input_dir",
@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     consolidate_uccs_cmd.add_argument(
         "--outdir",
-        help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the input directory.",
+        help="Existing output directory or a .csv file path. Defaults to parcel_demand.csv in the current working directory.",
     )
     consolidate_uccs_cmd.set_defaults(
         handler=lambda args: run_consolidate_uccs(args.input_dir, args.outdir)

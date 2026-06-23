@@ -1,20 +1,24 @@
+import math
 import tomllib
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
 from urban_dollop.helpers.validation import validate_origin_zones
 from urban_dollop.models.delivery_trip import DeliveryTrip
 from urban_dollop.models.parcel_demand import ParcelDemand
-from urban_dollop.models.skim_matrix import SkimMatrix
+from urban_dollop.models.skim_distance import SkimDistance
 from urban_dollop.models.vehicle import Vehicle
+from urban_dollop.models.zone import Zone
 from urban_dollop.parcel_scheduling.config import ParcelSchedulingConfig
 
 
 def schedule_parcel_deliveries(
     demands: list[ParcelDemand],
     vehicles: list[Vehicle],
-    skim: SkimMatrix,
+    skim_distance: SkimDistance,
+    zones: list[Zone],
     config: ParcelSchedulingConfig | None = None,
 ) -> list[DeliveryTrip]:
     """Convert aggregated parcel demand into delivery trips.
@@ -24,19 +28,37 @@ def schedule_parcel_deliveries(
     followed by 2-opt improvement. Each tour becomes a sequence of
     DeliveryTrip legs: origin→stop₁, stop₁→stop₂, …, stopₙ→origin.
 
+    Spatial clustering uses distance (not travel time) with an optional
+    Euclidean blend when zone centroids are available, matching the
+    MASS-GT clustering heuristic. Tour construction and improvement use
+    distance only. 2-opt is used instead of MASS-GT's pairwise location
+    swaps — see literate-fishstick for justification.
+
     Args:
         demands: Output of generate_parcel_demand(), generate_logit_demand(),
             or a consolidation module.
         vehicles: Available vehicle types sorted by capacity (ascending).
             The smallest vehicle whose max_parcels ≥ tour size is chosen.
-        skim: Travel-time matrix used for nearest-neighbour and 2-opt.
+        skim_distance: Travel-distance matrix used for clustering and tour
+            optimisation.
+        zones: All zones in the scenario. Centroid coordinates (x, y) are
+            used for Euclidean blending in clustering when present. Load
+            zones from a GeoPackage to get centroids automatically; CSV
+            zones or programmatically constructed zones skip the blend.
         config: Optional overrides; falls back to urban-dollop.toml then defaults.
 
     Returns:
         List of DeliveryTrip records in (tour_id, trip_id) order.
     """
     config = _resolve_config(config)
-    validate_origin_zones(demands, skim)
+    validate_origin_zones(demands, skim_distance)
+
+    zone_coords: dict[int, tuple[float, float]] = {
+        z.zone_id: (z.x, z.y)
+        for z in zones
+        if z.x is not None and z.y is not None
+    }
+    cluster_dist_fn = _make_cluster_distance(skim_distance, zone_coords)
 
     vehicles_sorted = sorted(vehicles, key=lambda v: v.max_parcels)
     max_capacity = vehicles_sorted[-1].max_parcels
@@ -50,7 +72,7 @@ def schedule_parcel_deliveries(
 
     for (origin_zone_id, carrier), group_demands in by_origin.items():
         tours = _cluster_demands_spatially(
-            group_demands, origin_zone_id, max_capacity, skim
+            group_demands, origin_zone_id, max_capacity, cluster_dist_fn
         )
 
         for stop_list in tours:
@@ -59,8 +81,8 @@ def schedule_parcel_deliveries(
                 sum(d.n_parcels for d in stop_list), vehicles_sorted
             )
 
-            ordered = _nearest_neighbour(origin_zone_id, stop_list, skim)
-            ordered = _two_opt(origin_zone_id, ordered, skim)
+            ordered = _nearest_neighbour(origin_zone_id, stop_list, skim_distance)
+            ordered = _two_opt(origin_zone_id, ordered, skim_distance)
 
             origin = origin_zone_id
             for trip_id, stop in enumerate(ordered, start=1):
@@ -92,19 +114,58 @@ def schedule_parcel_deliveries(
     return trips
 
 
+def _make_cluster_distance(
+    skim: SkimDistance,
+    zone_coords: dict[int, tuple[float, float]],
+) -> Callable[[int, int], float]:
+    """Return a distance callable for spatial clustering.
+
+    When zone centroids are available, returns a blended metric
+    norm(skim_distance) + norm(euclidean), matching MASS-GT's
+    skimClustering formulation. Falls back to raw skim distance
+    when centroids are absent.
+    """
+    if not zone_coords:
+        return skim.get
+
+    max_skim = float(skim.data.max()) or 1.0
+
+    coords_list = list(zone_coords.values())
+    if len(coords_list) >= 2:
+        xs = np.array([c[0] for c in coords_list])
+        ys = np.array([c[1] for c in coords_list])
+        dx = xs[:, None] - xs[None, :]
+        dy = ys[:, None] - ys[None, :]
+        max_euclid = float(np.sqrt(dx**2 + dy**2).max()) or 1.0
+    else:
+        max_euclid = 1.0
+
+    def blended(from_id: int, to_id: int) -> float:
+        d = skim.get(from_id, to_id) / max_skim
+        if from_id in zone_coords and to_id in zone_coords:
+            x1, y1 = zone_coords[from_id]
+            x2, y2 = zone_coords[to_id]
+            e = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) / max_euclid
+        else:
+            e = 0.0
+        return d + e
+
+    return blended
+
+
 def _cluster_demands_spatially(
     demands: list[ParcelDemand],
     origin_zone_id: int,
     max_capacity: int,
-    skim: SkimMatrix,
+    dist_fn: Callable[[int, int], float],
 ) -> list[list[ParcelDemand]]:
-    """Cluster demands into capacity-constrained tours using MASS-GT spatial clustering.
+    """Cluster demands into capacity-constrained tours.
 
     Demands whose parcel count meets or exceeds max_capacity are assigned
     dedicated full-load tours. Remaining demands are clustered iteratively:
-    the furthest unassigned demand (by travel time from the origin) seeds each
-    new cluster; the nearest unassigned demands to that seed are greedily added
-    until capacity is reached.
+    the furthest unassigned demand seeds each new cluster; the nearest
+    unassigned demands to that seed are greedily added until capacity is
+    reached. dist_fn provides the distance metric (blended or raw).
     """
     tours: list[list[ParcelDemand]] = []
     to_cluster: list[ParcelDemand] = []
@@ -119,7 +180,7 @@ def _cluster_demands_spatially(
         return tours
 
     to_cluster.sort(
-        key=lambda d: skim.get(origin_zone_id, d.destination_zone_id),
+        key=lambda d: dist_fn(origin_zone_id, d.destination_zone_id),
         reverse=True,
     )
     unassigned = list(to_cluster)
@@ -130,7 +191,7 @@ def _cluster_demands_spatially(
         load = seed.n_parcels
 
         unassigned.sort(
-            key=lambda d: skim.get(seed.destination_zone_id, d.destination_zone_id)
+            key=lambda d: dist_fn(seed.destination_zone_id, d.destination_zone_id)
         )
 
         leftover: list[ParcelDemand] = []
@@ -142,7 +203,7 @@ def _cluster_demands_spatially(
                 leftover.append(d)
 
         leftover.sort(
-            key=lambda d: skim.get(origin_zone_id, d.destination_zone_id),
+            key=lambda d: dist_fn(origin_zone_id, d.destination_zone_id),
             reverse=True,
         )
         unassigned = leftover
@@ -154,7 +215,7 @@ def _cluster_demands_spatially(
 def _nearest_neighbour(
     origin_zone_id: int,
     stops: list[ParcelDemand],
-    skim: SkimMatrix,
+    skim: SkimDistance,
 ) -> list[ParcelDemand]:
     """Build a tour by always visiting the nearest unvisited stop."""
     zone_ids = [origin_zone_id] + [s.destination_zone_id for s in stops]
@@ -176,7 +237,7 @@ def _nearest_neighbour(
 def _two_opt(
     origin_zone_id: int,
     stops: list[ParcelDemand],
-    skim: SkimMatrix,
+    skim: SkimDistance,
     max_passes: int = 10,
 ) -> list[ParcelDemand]:
     """Improve a tour with 2-opt swaps; stops after max_passes or convergence."""

@@ -119,7 +119,11 @@ from `data/`. Writes `parcel_demand.csv` to the current directory by default.
 from urban_dollop import LinearZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_parcel_demand, ParcelDemandConfig, ParcelDemand
 
-zones = LinearZone.from_file("zones.gpkg", columns={"zone_id": "id", "households": "hh", "employment": "emp"})
+zones = LinearZone.from_file("zones.gpkg", columns={
+    "zone_id": "id",
+    "households": "hh",
+    "employment": "emp"
+})
 depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
 skim = SkimMatrix.from_file("skim_time.mtx", zones)
@@ -363,11 +367,18 @@ Returns one row per tour leg.
 
 | file | field | type | description |
 |---|---|---|---|
+| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
 | `vehicles.csv` | `vehicle_id` | `int` | unique vehicle type identifier |
 | `vehicles.csv` | `name` | `str` | vehicle type label |
 | `vehicles.csv` | `max_parcels` | `int` | maximum parcel capacity |
 
-Also requires `skim_time.mtx` in the same format as `generate-demand`.
+Also requires a `skim_distance.mtx` binary distance skim matrix: flat float32
+values, N² elements, in zone file order. A `.mtx.gz` is also accepted.
+Zone centroids are extracted automatically from `zones.gpkg` geometry and
+used to blend Euclidean distance into the spatial clustering metric, improving
+cluster stability in sparse zones. The blend is skipped when zones are loaded
+from CSV (no geometry column).
+
 The scheduler assigns the smallest vehicle whose capacity fits the tour load.
 
 **Config — `[parcel_scheduling]` in `urban-dollop.toml`:**
@@ -386,26 +397,27 @@ urban-dollop schedule-deliveries data/
 urban-dollop schedule-deliveries --outdir results/ data/
 ```
 
-Reads `zones.gpkg`, `vehicles.csv`, `skim_time.mtx`, and `parcel_demand.csv`
+Reads `zones.gpkg`, `vehicles.csv`, `skim_distance.mtx`, and `parcel_demand.csv`
 from `data/`. Writes `delivery_trips.csv` to the current directory by default.
 
 **Python API:**
 
 ```python
 from urban_dollop import (
-    ParcelDemand, SkimMatrix, Vehicle, Zone,
-    schedule_parcel_deliveries, ParcelSchedulingConfig, DeliveryTrip,
+    DeliveryTrip, ParcelDemand, ParcelSchedulingConfig, SkimDistance, Vehicle, Zone,
+    schedule_parcel_deliveries,
 )
 
 zones = Zone.from_file("zones.gpkg")
 vehicles = Vehicle.from_file("vehicles.csv")
-skim = SkimMatrix.from_file("skim_time.mtx", zones)
+skim_distance = SkimDistance.from_file("skim_distance.mtx", zones)
 demands = ParcelDemand.from_file("parcel_demand.csv")
 
 trips = schedule_parcel_deliveries(
     demands=demands,
     vehicles=vehicles,
-    skim=skim,
+    skim_distance=skim_distance,
+    zones=zones,
     config=ParcelSchedulingConfig(seed=42),
 )
 DeliveryTrip.to_file(trips, "delivery_trips.csv")
