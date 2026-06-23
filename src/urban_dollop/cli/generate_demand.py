@@ -41,8 +41,8 @@ def run_generate_demand(
         )
 
     output_path = _resolve_output_path(outdir)
-    zones_path = require_file(scenario_dir / "zones.gpkg")
-    depots_path = require_file(scenario_dir / "depots.gpkg")
+    zones_path = require_spatial_file(scenario_dir, "zones")
+    depots_path = require_spatial_file(scenario_dir, "depots")
     carriers_path = require_file(scenario_dir / "carrier_shares.csv")
     skim_path = require_skim_file(scenario_dir)
 
@@ -107,6 +107,17 @@ def require_file(path: Path) -> Path:
     if not path.is_file():
         raise CLIError(f"Expected a file but found something else: {path}")
     return path
+
+
+def require_spatial_file(scenario_dir: Path, stem: str) -> Path:
+    """Return the first of <stem>.gpkg or <stem>.csv that exists in scenario_dir."""
+    for ext in (".gpkg", ".csv"):
+        p = scenario_dir / f"{stem}{ext}"
+        if p.exists():
+            return p
+    raise CLIError(
+        f"Missing required input file: {scenario_dir / stem}.gpkg (or .csv)"
+    )
 
 
 def require_skim_file(scenario_dir: Path) -> Path:

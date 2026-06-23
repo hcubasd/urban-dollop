@@ -8,7 +8,7 @@ from urban_dollop import (
     ZeroEmissionZone,
     consolidate_microhubs,
 )
-from urban_dollop.cli.generate_demand import CLIError, require_file
+from urban_dollop.cli.generate_demand import CLIError, require_file, require_spatial_file
 
 DEFAULT_OUTPUT_FILENAME = "parcel_demand.csv"
 
@@ -21,7 +21,7 @@ def run_consolidate_microhubs(input_dir: str, outdir: str | None = None) -> int:
         raise CLIError(f"Input path is not a directory: {scenario_dir}")
 
     output_path = _resolve_output_path(outdir)
-    zones_path = require_file(scenario_dir / "zones.gpkg")
+    zones_path = require_spatial_file(scenario_dir, "zones")
     demand_path = require_file(scenario_dir / "parcel_demand.csv")
     microhubs_path = require_file(scenario_dir / "microhubs.csv")
     zez_path = require_file(scenario_dir / "zero_emission_zones.csv")

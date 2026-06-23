@@ -5,7 +5,6 @@ import geopandas as gpd
 from pydantic import BaseModel
 
 from urban_dollop.helpers.read_csv import read_csv
-from urban_dollop.helpers.read_gpkg import read_gpkg
 
 
 class Zone(BaseModel):

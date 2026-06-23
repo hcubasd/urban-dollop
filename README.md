@@ -75,18 +75,18 @@ carrier)` triple.
 
 | file | field | type | description |
 |---|---|---|---|
-| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
-| `zones.gpkg` | `households` | `float` | household count |
-| `zones.gpkg` | `employment` | `float` | employee count |
-| `depots.gpkg` | `depot_id` | `int` | unique depot identifier |
-| `depots.gpkg` | `zone_id` | `int` | zone the depot is located in |
-| `depots.gpkg` | `carrier` | `str` | carrier name |
+| `zones.gpkg` / `zones.csv` | `zone_id` | `int` | unique zone identifier |
+| `zones.gpkg` / `zones.csv` | `households` | `float` | household count |
+| `zones.gpkg` / `zones.csv` | `employment` | `float` | employee count |
+| `depots.gpkg` / `depots.csv` | `depot_id` | `int` | unique depot identifier |
+| `depots.gpkg` / `depots.csv` | `zone_id` | `int` | zone the depot is located in |
+| `depots.gpkg` / `depots.csv` | `carrier` | `str` | carrier name |
 | `carrier_shares.csv` | `name` | `str` | carrier name |
 | `carrier_shares.csv` | `share` | `float` | market share fraction (all shares must sum to 1.0) |
 
 Also requires a `skim_time.mtx` binary skim matrix: flat float32 values, N²
-elements, one per zone pair in the order zones appear in `zones.gpkg`.
-A gzip-compressed `skim_time.mtx.gz` is also accepted.
+elements, one per zone pair in zone file order. A gzip-compressed
+`skim_time.mtx.gz` is also accepted.
 
 **Config — `[parcel_demand]` in `urban-dollop.toml`:**
 
@@ -110,8 +110,9 @@ urban-dollop generate-demand data/
 urban-dollop generate-demand --outdir results/ data/
 ```
 
-Reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx`
-from `data/`. Writes `parcel_demand.csv` to the current directory by default.
+Reads `zones.gpkg` (or `zones.csv`), `depots.gpkg` (or `depots.csv`),
+`carrier_shares.csv`, and `skim_time.mtx` from `data/`. Writes
+`parcel_demand.csv` to the current directory by default.
 
 **Python API:**
 
@@ -159,8 +160,8 @@ Zone attributes required (instead of `households` and `employment`):
 | `population` | `float` | total resident population |
 | `urbanization_level` | `int` | integer urbanization class |
 
-A `zones.gpkg` with all five columns works for both formulations — each loads
-only what it needs.
+A `zones.gpkg` (or `zones.csv`) with all five columns works for both
+formulations — each loads only what it needs.
 
 Config uses a separate section — `[parcel_demand_logit]` instead of
 `[parcel_demand]`:
@@ -255,9 +256,9 @@ urban-dollop consolidate-uccs data/
 urban-dollop consolidate-uccs --outdir results/ data/
 ```
 
-Reads `zones.gpkg`, `parcel_demand.csv`, `uccs.csv`, `ucc_catchment_zones.csv`,
-and `skim_distance.mtx` from `data/`. Writes `parcel_demand.csv` to the current
-directory by default.
+Reads `zones.gpkg` (or `zones.csv`), `parcel_demand.csv`, `uccs.csv`,
+`ucc_catchment_zones.csv`, and `skim_distance.mtx` from `data/`. Writes
+`parcel_demand.csv` to the current directory by default.
 
 **Python API:**
 
@@ -316,7 +317,7 @@ urban-dollop consolidate-microhubs data/
 urban-dollop consolidate-microhubs --outdir results/ data/
 ```
 
-Reads `zones.gpkg`, `parcel_demand.csv`, `microhubs.csv`,
+Reads `zones.gpkg` (or `zones.csv`), `parcel_demand.csv`, `microhubs.csv`,
 `zero_emission_zones.csv`, and `skim_distance.mtx` from `data/`. Writes
 `parcel_demand.csv` to the current directory by default.
 
@@ -367,17 +368,17 @@ Returns one row per tour leg.
 
 | file | field | type | description |
 |---|---|---|---|
-| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
+| `zones.gpkg` / `zones.csv` | `zone_id` | `int` | unique zone identifier |
 | `vehicles.csv` | `vehicle_id` | `int` | unique vehicle type identifier |
 | `vehicles.csv` | `name` | `str` | vehicle type label |
 | `vehicles.csv` | `max_parcels` | `int` | maximum parcel capacity |
 
 Also requires a `skim_distance.mtx` binary distance skim matrix: flat float32
 values, N² elements, in zone file order. A `.mtx.gz` is also accepted.
-Zone centroids are extracted automatically from `zones.gpkg` geometry and
-used to blend Euclidean distance into the spatial clustering metric, improving
-cluster stability in sparse zones. The blend is skipped when zones are loaded
-from CSV (no geometry column).
+When zones are loaded from a GeoPackage, centroid coordinates are extracted
+from the geometry column and blended with skim distance in the spatial
+clustering step, improving cluster stability in sparse zones. Loading zones
+from CSV skips centroid extraction and uses skim distance alone for clustering.
 
 The scheduler assigns the smallest vehicle whose capacity fits the tour load.
 
@@ -397,8 +398,9 @@ urban-dollop schedule-deliveries data/
 urban-dollop schedule-deliveries --outdir results/ data/
 ```
 
-Reads `zones.gpkg`, `vehicles.csv`, `skim_distance.mtx`, and `parcel_demand.csv`
-from `data/`. Writes `delivery_trips.csv` to the current directory by default.
+Reads `zones.gpkg` (or `zones.csv`), `vehicles.csv`, `skim_distance.mtx`, and
+`parcel_demand.csv` from `data/`. Writes `delivery_trips.csv` to the current
+directory by default.
 
 **Python API:**
 

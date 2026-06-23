@@ -10,7 +10,7 @@ from urban_dollop import (
     Zone,
     schedule_parcel_deliveries,
 )
-from urban_dollop.cli.generate_demand import CLIError, require_file
+from urban_dollop.cli.generate_demand import CLIError, require_file, require_spatial_file
 
 DEFAULT_OUTPUT_FILENAME = "delivery_trips.csv"
 
@@ -30,7 +30,7 @@ def run_schedule_deliveries(input_dir: str, outdir: str | None = None) -> int:
         )
 
     output_path = _resolve_output_path(outdir)
-    zones_path = require_file(scenario_dir / "zones.gpkg")
+    zones_path = require_spatial_file(scenario_dir, "zones")
     vehicles_path = require_file(scenario_dir / "vehicles.csv")
     skim_dist_path = _require_skim_distance_file(scenario_dir)
     demand_path = require_file(scenario_dir / "parcel_demand.csv")
