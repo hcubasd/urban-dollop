@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     schedule_deliveries.add_argument(
         "input_dir",
-        help="Directory containing zones.gpkg, depots.gpkg, carrier_shares.csv, vehicles.csv, skim_time.mtx, and parcel_demand.csv.",
+        help="Directory containing zones.gpkg, vehicles.csv, skim_distance.mtx, and parcel_demand.csv.",
     )
     schedule_deliveries.add_argument(
         "--outdir",

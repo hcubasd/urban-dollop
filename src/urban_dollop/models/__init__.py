@@ -1,7 +1,6 @@
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.delivery_trip import DeliveryTrip
 from urban_dollop.models.depot import Depot
-from urban_dollop.models.geo_entity import GeoEntity
 from urban_dollop.models.linear_zone import LinearZone
 from urban_dollop.models.logit_zone import LogitZone
 from urban_dollop.models.microhub import Microhub
@@ -15,7 +14,6 @@ from urban_dollop.models.zero_emission_zone import ZeroEmissionZone
 from urban_dollop.models.zone import Zone
 
 __all__ = [
-    "GeoEntity",
     "Zone",
     "LinearZone",
     "LogitZone",
