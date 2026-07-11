@@ -5,8 +5,10 @@ from urban_dollop.models import (
     DeliveryTrip,
     Depot,
     LinearZone,
+    LoadedLink,
     LogitZone,
     Microhub,
+    NetworkLink,
     ParcelDemand,
     SkimDistance,
     SkimMatrix,
@@ -15,6 +17,7 @@ from urban_dollop.models import (
     Vehicle,
     ZeroEmissionZone,
     Zone,
+    ZoneNode,
 )
 from urban_dollop.parcel_demand import (
     LogitDemandConfig,
@@ -27,6 +30,7 @@ from urban_dollop.parcel_scheduling import (
     schedule_parcel_deliveries,
 )
 from urban_dollop.consolidation import UCCConfig, consolidate_microhubs, consolidate_uccs
+from urban_dollop.network_assignment import NetworkAssignmentConfig, assign_network
 
 __all__ = [
     "Zone",
@@ -52,4 +56,9 @@ __all__ = [
     "consolidate_microhubs",
     "consolidate_uccs",
     "UCCConfig",
+    "NetworkLink",
+    "ZoneNode",
+    "LoadedLink",
+    "NetworkAssignmentConfig",
+    "assign_network",
 ]

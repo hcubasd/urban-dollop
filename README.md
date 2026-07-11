@@ -16,7 +16,7 @@ parameters so the same pipeline can be applied to any city.
 | Parcel demand generation | `parcel_dmnd` | implemented |
 | Parcel consolidation (UCCs + microhubs) | `parcel_dmnd` | implemented |
 | Parcel delivery scheduling | `parcel_schd` | implemented |
-| Network / route assignment | `traf` | planned |
+| Network / route assignment | `traf` | implemented |
 | Emission calculation (COPERT V + grade) | `traf` + grade extension | planned |
 | KPI indicators | `outp` | planned |
 | Service trip demand | `service` | planned |
@@ -44,6 +44,7 @@ flowchart LR
     B --> C
     B --> D
     C --> D
+    D --> E[assign-network]
 ```
 
 The consolidation steps are optional and composable — run either, both, or
@@ -379,8 +380,8 @@ values, N² elements, in zone file order. A `.mtx.gz` is also accepted.
 When zones are loaded from a GeoPackage, centroid coordinates are extracted
 from the geometry column and blended with skim distance in the spatial
 clustering step, improving cluster stability in sparse zones. `zones.csv` is
-also accepted, but skips centroid extraction and uses skim distance alone for
-clustering.
+also accepted; include `x` and `y` columns to provide centroids explicitly
+and get the same blend.
 
 The scheduler assigns the smallest vehicle whose capacity fits the tour load.
 
@@ -425,4 +426,92 @@ trips = schedule_parcel_deliveries(
     config=ParcelSchedulingConfig(seed=42),
 )
 DeliveryTrip.to_file(trips, "delivery_trips.csv")
+```
+
+---
+
+### assign-network
+
+Assigns delivery trips to road network links via shortest-path routing. For
+each trip leg in `delivery_trips.csv`, finds the minimum-distance path through
+the road network using Dijkstra's algorithm and accumulates vehicle traversal
+counts per link. Returns one row per `(link_id, vehicle_id)` pair that carries
+at least one trip.
+
+**Canonical output — `loaded_links.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `link_id` | `int` | joins back to `network_links` |
+| `road_type` | `str` | `urban`, `rural`, or `highway` |
+| `distance_m` | `float` | link length in metres |
+| `grade_pct` | `float` | average grade (0.0 if not provided in input) |
+| `vehicle_id` | `int` | vehicle type traversing this link |
+| `n_trips` | `int` | number of traversals by this vehicle type |
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `delivery_trips.csv` | *(all fields)* | — | output of `schedule-deliveries` |
+| `network_links.gpkg` | `link_id` | `int` | unique link identifier |
+| `network_links.gpkg` | `from_node_id` | `int` | origin node |
+| `network_links.gpkg` | `to_node_id` | `int` | destination node |
+| `network_links.gpkg` | `road_type` | `str` | `urban`, `rural`, or `highway` |
+| `network_links.gpkg` | `grade_pct` | `float` | average grade %; defaults to 0.0 if column absent |
+| `zone_nodes.csv` | `zone_id` | `int` | zone identifier |
+| `zone_nodes.csv` | `node_id` | `int` | network gateway node for trips entering or leaving this zone |
+| `vehicles.csv` | *(all fields)* | — | same file as `schedule-deliveries` |
+
+`network_links.csv` is also accepted; requires an explicit `distance_m` column
+since there is no geometry to derive it from. When loading from a GeoPackage,
+`distance_m` is derived from the LineString geometry automatically if the column
+is absent.
+
+`zone_nodes.csv` maps each zone to its entry point in the road network — the
+node where vehicles from that zone join or leave the graph. This is a flat
+two-column lookup; how the mapping is determined (e.g. nearest node to zone
+centroid) is left to the user.
+
+**Config — `[network_assignment]` in `urban-dollop.toml`:**
+
+```toml
+[network_assignment]
+# seed = 42
+```
+
+No required parameters. `seed` is reserved for future multi-routing support.
+
+**CLI:**
+
+```bash
+urban-dollop assign-network data/
+urban-dollop assign-network --outdir results/ data/
+```
+
+Reads `delivery_trips.csv`, `network_links.gpkg` (or `.csv`), `zone_nodes.csv`,
+and `vehicles.csv` from `data/`. Writes `loaded_links.csv` to the current
+directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    DeliveryTrip, LoadedLink, NetworkAssignmentConfig, NetworkLink,
+    Vehicle, ZoneNode, assign_network,
+)
+
+trips = DeliveryTrip.from_file("delivery_trips.csv")
+links = NetworkLink.from_file("network_links.gpkg")
+zone_nodes = ZoneNode.from_file("zone_nodes.csv")
+vehicles = Vehicle.from_file("vehicles.csv")
+
+result = assign_network(
+    trips=trips,
+    links=links,
+    zone_nodes=zone_nodes,
+    vehicles=vehicles,
+    config=NetworkAssignmentConfig(seed=42),
+)
+LoadedLink.to_file(result, "loaded_links.csv")
 ```

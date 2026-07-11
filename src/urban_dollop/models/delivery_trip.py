@@ -1,6 +1,9 @@
 from pathlib import Path
+from typing import Self
 
 from pydantic import BaseModel
+
+from urban_dollop.helpers.read_csv import read_csv
 
 
 class DeliveryTrip(BaseModel):
@@ -22,6 +25,13 @@ class DeliveryTrip(BaseModel):
     destination_zone_id: int
     n_parcels: int
     vehicle_id: int
+
+    @classmethod
+    def from_file(cls, path: str | Path, columns: dict[str, str] = {}) -> list[Self]:
+        fields = list(cls.model_fields)
+        required = [n for n, fi in cls.model_fields.items() if fi.is_required()]
+        records = read_csv(path, columns, fields, required)
+        return [cls(**r) for r in records]
 
     @classmethod
     def to_file(cls, trips: list["DeliveryTrip"], path: str | Path) -> None:

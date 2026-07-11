@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from urban_dollop.cli.assign_network import run_assign_network
 from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
 from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
@@ -83,6 +84,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     consolidate_uccs_cmd.set_defaults(
         handler=lambda args: run_consolidate_uccs(args.input_dir, args.outdir)
+    )
+
+    assign_network_cmd = subparsers.add_parser(
+        "assign-network",
+        help="Assign delivery trips to road network links via shortest-path routing.",
+    )
+    assign_network_cmd.add_argument(
+        "input_dir",
+        help="Directory containing delivery_trips.csv, network_links.gpkg (or .csv), zone_nodes.csv, and vehicles.csv.",
+    )
+    assign_network_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to loaded_links.csv in the current working directory.",
+    )
+    assign_network_cmd.set_defaults(
+        handler=lambda args: run_assign_network(args.input_dir, args.outdir)
     )
 
     return parser

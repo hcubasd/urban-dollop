@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 
 from urban_dollop.models.carrier import Carrier
+from urban_dollop.models.network_link import NetworkLink
+from urban_dollop.models.zone_node import ZoneNode
 from urban_dollop.models.depot import Depot
 from urban_dollop.models.linear_zone import LinearZone
 from urban_dollop.models.logit_zone import LogitZone
@@ -161,6 +163,42 @@ def uccs():
 @pytest.fixture
 def ucc_config():
     return UCCConfig(probability=1.0)
+
+
+@pytest.fixture
+def network_links():
+    # 5-node network:
+    #   1 --10m--> 2 --15m--> 3
+    #   1 --50m-------------- 3  (direct, longer)
+    #   3 --8m--> 4
+    #   2 --30m-------------- 4
+    return [
+        NetworkLink(link_id=1, from_node_id=1, to_node_id=2, distance_m=10.0, road_type="urban"),
+        NetworkLink(link_id=2, from_node_id=2, to_node_id=3, distance_m=15.0, road_type="urban"),
+        NetworkLink(link_id=3, from_node_id=1, to_node_id=3, distance_m=50.0, road_type="highway"),
+        NetworkLink(link_id=4, from_node_id=3, to_node_id=4, distance_m=8.0,  road_type="rural"),
+        NetworkLink(link_id=5, from_node_id=2, to_node_id=4, distance_m=30.0, road_type="rural"),
+    ]
+
+
+@pytest.fixture
+def network_links_with_grade():
+    return [
+        NetworkLink(link_id=1, from_node_id=1, to_node_id=2, distance_m=10.0, road_type="urban", grade_pct=5.0),
+        NetworkLink(link_id=2, from_node_id=2, to_node_id=3, distance_m=15.0, road_type="urban", grade_pct=2.0),
+        NetworkLink(link_id=3, from_node_id=3, to_node_id=4, distance_m=8.0,  road_type="rural", grade_pct=0.0),
+    ]
+
+
+@pytest.fixture
+def zone_nodes():
+    # Each zone maps directly to the node with the same ID
+    return [
+        ZoneNode(zone_id=1, node_id=1),
+        ZoneNode(zone_id=2, node_id=2),
+        ZoneNode(zone_id=3, node_id=3),
+        ZoneNode(zone_id=4, node_id=4),
+    ]
 
 
 @pytest.fixture

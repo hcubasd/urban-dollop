@@ -1,0 +1,122 @@
+import pytest
+
+from urban_dollop.models.delivery_trip import DeliveryTrip
+from urban_dollop.models.network_link import NetworkLink
+from urban_dollop.models.zone_node import ZoneNode
+from urban_dollop.network_assignment import assign_network
+
+
+def make_trip(origin, destination, vehicle_id=1, tour_id=1, trip_id=1):
+    return DeliveryTrip(
+        tour_id=tour_id,
+        trip_id=trip_id,
+        carrier="alpha",
+        origin_zone_id=origin,
+        destination_zone_id=destination,
+        n_parcels=10,
+        vehicle_id=vehicle_id,
+    )
+
+
+def test_shortest_path_used(network_links, zone_nodes, vehicles):
+    # Zone 1→3: shortest is 1→2→3 (25m), not direct 1→3 (50m)
+    trips = [make_trip(1, 3)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    link_ids = {r.link_id for r in result}
+    assert 1 in link_ids  # 1→2
+    assert 2 in link_ids  # 2→3
+    assert 3 not in link_ids  # direct 1→3 not used
+
+
+def test_trip_count_accumulates(network_links, zone_nodes, vehicles):
+    # Two trips on the same route accumulate n_trips
+    trips = [make_trip(1, 3, tour_id=1), make_trip(1, 3, tour_id=2, trip_id=1)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    by_link = {r.link_id: r.n_trips for r in result}
+    assert by_link[1] == 2
+    assert by_link[2] == 2
+
+
+def test_vehicle_id_preserved(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 3, vehicle_id=2)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    assert all(r.vehicle_id == 2 for r in result)
+
+
+def test_different_vehicle_types_separate_rows(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 3, vehicle_id=1), make_trip(1, 3, vehicle_id=2, tour_id=2)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    link1_rows = [r for r in result if r.link_id == 1]
+    assert len(link1_rows) == 2
+    assert {r.vehicle_id for r in link1_rows} == {1, 2}
+    assert all(r.n_trips == 1 for r in link1_rows)
+
+
+def test_grade_pct_carried_through(network_links_with_grade, zone_nodes, vehicles):
+    links = network_links_with_grade
+    zone_nodes_subset = [zn for zn in zone_nodes if zn.zone_id in {1, 2}]
+    trips = [make_trip(1, 2)]
+    result = assign_network(trips, links, zone_nodes_subset, vehicles)
+
+    assert len(result) == 1
+    assert result[0].link_id == 1
+    assert result[0].grade_pct == 5.0
+
+
+def test_grade_pct_defaults_to_zero(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 3)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    assert all(r.grade_pct == 0.0 for r in result)
+
+
+def test_same_origin_destination_skipped(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 1)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+    assert result == []
+
+
+def test_empty_trips_returns_empty(network_links, zone_nodes, vehicles):
+    result = assign_network([], network_links, zone_nodes, vehicles)
+    assert result == []
+
+
+def test_empty_links_returns_empty(zone_nodes, vehicles):
+    trips = [make_trip(1, 3)]
+    result = assign_network(trips, [], zone_nodes, vehicles)
+    assert result == []
+
+
+def test_missing_zone_node_raises(network_links, vehicles):
+    zone_nodes = [ZoneNode(zone_id=1, node_id=1)]  # zone 3 missing
+    trips = [make_trip(1, 3)]
+    with pytest.raises(ValueError, match="zone_nodes"):
+        assign_network(trips, network_links, zone_nodes, vehicles)
+
+
+def test_missing_vehicle_id_raises(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 3, vehicle_id=99)]
+    with pytest.raises(ValueError, match="Vehicle IDs"):
+        assign_network(trips, network_links, zone_nodes, vehicles)
+
+
+def test_link_attributes_in_output(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 3)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    link1 = next(r for r in result if r.link_id == 1)
+    assert link1.road_type == "urban"
+    assert link1.distance_m == 10.0
+
+
+def test_multi_hop_route(network_links, zone_nodes, vehicles):
+    # Zone 1→4: shortest is 1→2→3→4 (10+15+8=33m) vs 1→2→4 (10+30=40m)
+    trips = [make_trip(1, 4)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    link_ids = {r.link_id for r in result}
+    assert link_ids == {1, 2, 4}  # links 1→2, 2→3, 3→4
