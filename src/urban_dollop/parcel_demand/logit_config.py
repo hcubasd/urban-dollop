@@ -24,6 +24,8 @@ class LogitDemandConfig(BaseModel):
     mu_thresholds: list[float]
     parcel_levels: list[int]
     monthly_to_daily_divisor: float
+    beta_age: dict[int, float] | None = None
+    beta_income: dict[int, float] | None = None
     calibration_target: float | None = None
 
     @model_validator(mode="after")
@@ -33,6 +35,18 @@ class LogitDemandConfig(BaseModel):
             raise ValueError(
                 f"mu_thresholds must have {expected} entries "
                 f"(one per parcel level except the last), got {len(self.mu_thresholds)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def demographic_betas_must_come_together(self) -> "LogitDemandConfig":
+        has_age = self.beta_age is not None
+        has_income = self.beta_income is not None
+        if has_age != has_income:
+            raise ValueError(
+                "beta_age and beta_income must both be provided or both omitted; "
+                f"got beta_age={'set' if has_age else 'None'}, "
+                f"beta_income={'set' if has_income else 'None'}"
             )
         return self
 

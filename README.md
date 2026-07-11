@@ -183,6 +183,15 @@ parameters must be estimated from a household survey for your study area.
 The Dutch HARMONY v3 values shown above are for reference only and are
 **not** appropriate for other countries without re-estimation.
 
+**Demographic stratification (optional):** When zone-level population broken
+down by age cohort and income bracket is available, the full MASS-GT logit
+formulation can be used. Supply `beta_age` and `beta_income` in the config
+(both required together or neither) and add `population_strata` to each
+`LogitZone` in the Python API. The linear predictor becomes
+`eta = beta_age[a] + beta_income[i] + beta_urbanization[sted]` summed over
+all demographic cells. Without strata, the model uses `beta_urbanization`
+and total zone population only.
+
 Add `--logit` to the CLI command; everything else is identical:
 
 ```bash
@@ -190,7 +199,7 @@ urban-dollop generate-demand --logit data/
 urban-dollop generate-demand --logit --outdir results/ data/
 ```
 
-**Python API:**
+**Python API (urbanization only):**
 
 ```python
 from urban_dollop import LogitZone, Depot, Carrier, SkimMatrix
@@ -213,6 +222,35 @@ demands = generate_logit_demand(
 )
 ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
+
+**Python API (full demographic stratification):**
+
+```python
+zones = [
+    LogitZone(
+        zone_id=1, population=5000, urbanization_level=2,
+        population_strata={
+            1: {1: 800.0, 2: 600.0, 3: 400.0},   # age cohort 1, income brackets 1–3
+            2: {1: 900.0, 2: 1100.0, 3: 1200.0},  # age cohort 2, income brackets 1–3
+        },
+    ),
+    # ...
+]
+demands = generate_logit_demand(
+    zones, depots, carriers, skim,
+    config=LogitDemandConfig(
+        beta_urbanization={1: 0.0, 2: 0.4},
+        beta_age={1: -0.2, 2: 0.3},
+        beta_income={1: -0.5, 2: 0.0, 3: 0.8},
+        mu_thresholds=[-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0],
+        parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
+        monthly_to_daily_divisor=60.0,
+    ),
+)
+```
+
+`population_strata` is only supported via the Python API. CSV/GeoPackage
+loading populates `population` and `urbanization_level` only.`
 
 ---
 

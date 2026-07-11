@@ -38,7 +38,18 @@ def generate(
 
     shares = [c.share for c in carriers]
 
-    zone_raws = [_zone_daily_demand(z, config) for z in zones]
+    use_strata = config.beta_age is not None
+    if use_strata:
+        missing = [z.zone_id for z in zones if z.population_strata is None]
+        if missing:
+            raise ValueError(
+                f"beta_age and beta_income are configured but zones {missing} "
+                "have no population_strata. Provide strata for every zone or "
+                "remove beta_age/beta_income to use the urbanization-only model."
+            )
+        zone_raws = [_zone_daily_demand_stratified(z, config) for z in zones]
+    else:
+        zone_raws = [_zone_daily_demand(z, config) for z in zones]
 
     if config.calibration_target is not None:
         raw_total = sum(zone_raws)
@@ -96,6 +107,25 @@ def _zone_daily_demand(zone: LogitZone, config: LogitDemandConfig) -> float:
     # Expected parcels per person (monthly), then convert to daily
     expected_monthly_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
     return expected_monthly_pp / config.monthly_to_daily_divisor * zone.population
+
+
+def _zone_daily_demand_stratified(zone: LogitZone, config: LogitDemandConfig) -> float:
+    """Full MASS-GT logit: sum expected parcels over age × income demographic cells."""
+    total = 0.0
+    beta_urb = config.beta_urbanization.get(zone.urbanization_level, 0.0)
+    for age_cohort, income_map in zone.population_strata.items():
+        beta_age = config.beta_age.get(age_cohort, 0.0)
+        for income_bracket, stratum_pop in income_map.items():
+            beta_inc = config.beta_income.get(income_bracket, 0.0)
+            eta = beta_age + beta_inc + beta_urb
+            cprobs = [1.0 / (1.0 + exp(eta - mu)) for mu in config.mu_thresholds]
+            cprobs.append(1.0)
+            probs = [cprobs[0]]
+            for i in range(1, len(config.parcel_levels)):
+                probs.append(cprobs[i] - cprobs[i - 1])
+            expected_monthly_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
+            total += expected_monthly_pp / config.monthly_to_daily_divisor * stratum_pop
+    return total
 
 
 def _resolve_config(config: LogitDemandConfig | None) -> LogitDemandConfig:

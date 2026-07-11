@@ -200,3 +200,129 @@ def test_logit_higher_urbanization_produces_more_demand(depots, carriers, skim):
         for d in generate_logit_demand(high_urb, depots, carriers, skim, config)
     )
     assert high_total > low_total
+
+
+# ---------------------------------------------------------------------------
+# Demographic stratification (age × income) tests
+# ---------------------------------------------------------------------------
+
+def _strata_config(depots, carriers, skim, logit_config):
+    """Shared setup: two age cohorts × two income brackets, logit config with betas."""
+    zones = [
+        LogitZone(
+            zone_id=i,
+            population=400,
+            urbanization_level=1,
+            population_strata={1: {1: 100.0, 2: 100.0}, 2: {1: 100.0, 2: 100.0}},
+        )
+        for i in range(1, 5)
+    ]
+    config = LogitDemandConfig(
+        beta_urbanization=logit_config.beta_urbanization,
+        mu_thresholds=logit_config.mu_thresholds,
+        parcel_levels=logit_config.parcel_levels,
+        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        beta_age={1: 0.0, 2: 0.5},
+        beta_income={1: 0.0, 2: 1.0},
+    )
+    return zones, config
+
+
+def test_stratified_returns_parcel_demands(depots, carriers, skim, logit_config):
+    zones, config = _strata_config(depots, carriers, skim, logit_config)
+    demands = generate_logit_demand(zones, depots, carriers, skim, config)
+    assert len(demands) > 0
+
+
+def test_stratified_higher_income_produces_more_demand(depots, carriers, skim, logit_config):
+    base_config = LogitDemandConfig(
+        beta_urbanization={1: 0.0},
+        mu_thresholds=logit_config.mu_thresholds,
+        parcel_levels=logit_config.parcel_levels,
+        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        beta_age={1: 0.0},
+        beta_income={1: 0.0, 2: 2.0},
+    )
+    low_income_zones = [
+        LogitZone(
+            zone_id=i, population=100, urbanization_level=1,
+            population_strata={1: {1: 100.0}},
+        )
+        for i in range(1, 5)
+    ]
+    high_income_zones = [
+        LogitZone(
+            zone_id=i, population=100, urbanization_level=1,
+            population_strata={1: {2: 100.0}},
+        )
+        for i in range(1, 5)
+    ]
+    low_total = sum(
+        d.n_parcels for d in generate_logit_demand(low_income_zones, depots, carriers, skim, base_config)
+    )
+    high_total = sum(
+        d.n_parcels for d in generate_logit_demand(high_income_zones, depots, carriers, skim, base_config)
+    )
+    assert high_total > low_total
+
+
+def test_stratified_strata_sum_equals_urbanization_only_when_betas_zero(
+    depots, carriers, skim, logit_config
+):
+    config_urb = LogitDemandConfig(
+        beta_urbanization={1: 0.3},
+        mu_thresholds=logit_config.mu_thresholds,
+        parcel_levels=logit_config.parcel_levels,
+        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+    )
+    config_strata = LogitDemandConfig(
+        beta_urbanization={1: 0.3},
+        mu_thresholds=logit_config.mu_thresholds,
+        parcel_levels=logit_config.parcel_levels,
+        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        beta_age={1: 0.0},
+        beta_income={1: 0.0},
+    )
+    zones_urb = [
+        LogitZone(zone_id=i, population=200.0, urbanization_level=1)
+        for i in range(1, 5)
+    ]
+    zones_strata = [
+        LogitZone(
+            zone_id=i, population=200.0, urbanization_level=1,
+            population_strata={1: {1: 200.0}},
+        )
+        for i in range(1, 5)
+    ]
+    total_urb = sum(
+        d.n_parcels for d in generate_logit_demand(zones_urb, depots, carriers, skim, config_urb)
+    )
+    total_strata = sum(
+        d.n_parcels for d in generate_logit_demand(zones_strata, depots, carriers, skim, config_strata)
+    )
+    assert total_urb == total_strata
+
+
+def test_stratified_raises_when_zone_missing_strata(depots, carriers, skim, logit_config):
+    config = LogitDemandConfig(
+        beta_urbanization={1: 0.0},
+        mu_thresholds=logit_config.mu_thresholds,
+        parcel_levels=logit_config.parcel_levels,
+        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        beta_age={1: 0.0},
+        beta_income={1: 0.0},
+    )
+    zones = [LogitZone(zone_id=i, population=100, urbanization_level=1) for i in range(1, 5)]
+    with pytest.raises(ValueError, match="population_strata"):
+        generate_logit_demand(zones, depots, carriers, skim, config)
+
+
+def test_logit_config_raises_when_only_one_demographic_beta_provided(logit_config):
+    with pytest.raises(ValueError, match="beta_age and beta_income"):
+        LogitDemandConfig(
+            beta_urbanization={1: 0.0},
+            mu_thresholds=logit_config.mu_thresholds,
+            parcel_levels=logit_config.parcel_levels,
+            monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+            beta_age={1: 0.0},
+        )
