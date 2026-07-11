@@ -172,20 +172,16 @@ Config uses a separate section — `[parcel_demand_logit]` instead of
 [parcel_demand_logit]
 beta_urbanization = {1 = 2.0, 2 = 1.2, 3 = 0.4, 4 = -0.3, 5 = -1.0}
 mu_thresholds = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
+parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]
+monthly_to_daily_divisor = 60.0
 # calibration_target = 50000
-# monthly_to_daily_divisor = 60.0
-# parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]
 ```
 
-`beta_urbanization` and `mu_thresholds` are required and must be estimated from
-a household survey for your study area. The Dutch estimates from HARMONY v3
-(de Bok et al. 2025) are **not** appropriate defaults for other countries.
-
-`parcel_levels` defaults to `[0, 1, 2, 3, 4, 5, 10, 15, 20]`, the HARMONY v3
-survey response categories. Override this if your survey used different discrete
-options; a wrong value here silently produces wrong results.
-`monthly_to_daily_divisor` converts monthly survey responses to a daily rate and
-defaults to `60.0`.
+All four of `beta_urbanization`, `mu_thresholds`, `parcel_levels`, and
+`monthly_to_daily_divisor` are required. No defaults are provided — all
+parameters must be estimated from a household survey for your study area.
+The Dutch HARMONY v3 values shown above are for reference only and are
+**not** appropriate for other countries without re-estimation.
 
 Add `--logit` to the CLI command; everything else is identical:
 
@@ -210,6 +206,8 @@ demands = generate_logit_demand(
     config=LogitDemandConfig(
         beta_urbanization={1: 2.0, 2: 1.2, 3: 0.4, 4: -0.3, 5: -1.0},
         mu_thresholds=[-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0],
+        parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
+        monthly_to_daily_divisor=60.0,
         calibration_target=50000,
     ),
 )
@@ -365,6 +363,7 @@ Returns one row per tour leg.
 | `destination_zone_id` | `int` | zone at the end of this leg |
 | `n_parcels` | `int` | parcels delivered at this stop (0 for the return leg) |
 | `vehicle_id` | `int` | vehicle type assigned to this tour |
+| `departure_hour` | `int \| null` | hour of departure (0–23); present only when `departure_time_distribution` is configured |
 
 **Canonical inputs:**
 
@@ -390,9 +389,12 @@ The scheduler assigns the smallest vehicle whose capacity fits the tour load.
 ```toml
 [parcel_scheduling]
 # seed = 42
+# departure_time_distribution = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.3, 0.6, 0.85, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 ```
 
-`seed` is optional; set it to make tour clustering reproducible.
+`seed` is optional; set it to make tour clustering and departure time sampling reproducible.
+
+`departure_time_distribution` is optional. When omitted, no departure hours are assigned and `parcel_trips.csv` will not contain a `departure_hour` column. When provided, it must be a 24-element array of cumulative hourly shares (non-decreasing, last value exactly 1.0). Each tour is assigned a departure hour sampled from this distribution; all legs of the same tour share that hour. This enables hourly traffic intensity reporting in downstream modules.
 
 **CLI:**
 
@@ -447,7 +449,8 @@ that carries at least one trip.
 | `distance_m` | `float` | link length in metres |
 | `grade_pct` | `float` | average grade (0.0 if not provided in input) |
 | `vehicle_id` | `int` | vehicle type traversing this link |
-| `n_trips` | `int` | number of traversals by this vehicle type |
+| `hour` | `int \| null` | departure hour (0–23); present only when upstream trips carry `departure_hour` |
+| `n_trips` | `int` | number of traversals by this vehicle type (and hour, if disaggregated) |
 
 **Canonical inputs:**
 

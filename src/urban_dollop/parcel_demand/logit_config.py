@@ -22,8 +22,8 @@ class LogitDemandConfig(BaseModel):
 
     beta_urbanization: dict[int, float]
     mu_thresholds: list[float]
-    parcel_levels: list[int] = [0, 1, 2, 3, 4, 5, 10, 15, 20]
-    monthly_to_daily_divisor: float = 60.0
+    parcel_levels: list[int]
+    monthly_to_daily_divisor: float
     calibration_target: float | None = None
 
     @model_validator(mode="after")

@@ -7,6 +7,10 @@ from urban_dollop.models.parcel_demand import ParcelDemand
 from urban_dollop.parcel_scheduling.config import ParcelSchedulingConfig
 
 
+# Cumulative distribution: all departures in hours 6–9
+_MORNING_DIST = [0.0] * 6 + [0.25, 0.5, 0.75, 1.0] + [1.0] * 14
+
+
 def test_total_parcels_preserved(
     zones, depots, carriers, vehicles, skim, skim_distance, demand_config
 ):
@@ -93,3 +97,68 @@ def test_all_stops_in_tour_share_carrier(
     for t in trips:
         tour_carriers.setdefault(t.tour_id, set()).add(t.carrier)
     assert all(len(cs) == 1 for cs in tour_carriers.values())
+
+
+def test_without_departure_distribution_hour_is_none(
+    zones, depots, carriers, vehicles, skim, skim_distance, demand_config
+):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    trips = schedule_parcel_deliveries(demands, vehicles, skim_distance, zones)
+    assert all(t.departure_hour is None for t in trips)
+
+
+def test_with_departure_distribution_all_trips_have_hour(
+    zones, depots, carriers, vehicles, skim, skim_distance, demand_config
+):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    config = ParcelSchedulingConfig(departure_time_distribution=_MORNING_DIST)
+    trips = schedule_parcel_deliveries(demands, vehicles, skim_distance, zones, config)
+    assert all(t.departure_hour is not None for t in trips)
+
+
+def test_departure_hours_within_distribution_range(
+    zones, depots, carriers, vehicles, skim, skim_distance, demand_config
+):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    config = ParcelSchedulingConfig(departure_time_distribution=_MORNING_DIST, seed=0)
+    trips = schedule_parcel_deliveries(demands, vehicles, skim_distance, zones, config)
+    assert all(6 <= t.departure_hour <= 9 for t in trips)
+
+
+def test_all_legs_of_tour_share_departure_hour(
+    zones, depots, carriers, vehicles, skim, skim_distance, demand_config
+):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    config = ParcelSchedulingConfig(departure_time_distribution=_MORNING_DIST, seed=0)
+    trips = schedule_parcel_deliveries(demands, vehicles, skim_distance, zones, config)
+    tour_hours: dict[int, set] = {}
+    for t in trips:
+        tour_hours.setdefault(t.tour_id, set()).add(t.departure_hour)
+    assert all(len(hs) == 1 for hs in tour_hours.values())
+
+
+def test_departure_distribution_seed_is_reproducible(
+    zones, depots, carriers, vehicles, skim, skim_distance, demand_config
+):
+    demands = generate_parcel_demand(zones, depots, carriers, skim, demand_config)
+    config = ParcelSchedulingConfig(departure_time_distribution=_MORNING_DIST, seed=42)
+    trips_a = schedule_parcel_deliveries(demands, vehicles, skim_distance, zones, config)
+    trips_b = schedule_parcel_deliveries(demands, vehicles, skim_distance, zones, config)
+    assert [t.departure_hour for t in trips_a] == [t.departure_hour for t in trips_b]
+
+
+def test_departure_distribution_validation_wrong_length():
+    with pytest.raises(Exception, match="24"):
+        ParcelSchedulingConfig(departure_time_distribution=[0.5, 1.0])
+
+
+def test_departure_distribution_validation_not_cumulative():
+    dist = [0.0] * 6 + [0.5, 0.25, 0.75, 1.0] + [1.0] * 14  # drops at hour 7
+    with pytest.raises(Exception, match="non-decreasing"):
+        ParcelSchedulingConfig(departure_time_distribution=dist)
+
+
+def test_departure_distribution_validation_must_end_at_one():
+    dist = [0.0] * 23 + [0.9]
+    with pytest.raises(Exception, match="1.0"):
+        ParcelSchedulingConfig(departure_time_distribution=dist)

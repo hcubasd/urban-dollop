@@ -53,6 +53,9 @@ def schedule_parcel_deliveries(
     config = _resolve_config(config)
     validate_origin_zones(demands, skim_distance)
 
+    rng = np.random.default_rng(config.seed)
+    dist = config.departure_time_distribution
+
     zone_coords: dict[int, tuple[float, float]] = {
         z.zone_id: (z.x, z.y)
         for z in zones
@@ -80,6 +83,7 @@ def schedule_parcel_deliveries(
             vehicle = _select_vehicle(
                 sum(d.n_parcels for d in stop_list), vehicles_sorted
             )
+            departure_hour = _sample_hour(dist, rng) if dist is not None else None
 
             ordered = _nearest_neighbour(origin_zone_id, stop_list, skim_distance)
             ordered = _two_opt(origin_zone_id, ordered, skim_distance)
@@ -95,6 +99,7 @@ def schedule_parcel_deliveries(
                         destination_zone_id=stop.destination_zone_id,
                         n_parcels=stop.n_parcels,
                         vehicle_id=vehicle.vehicle_id,
+                        departure_hour=departure_hour,
                     )
                 )
                 origin = stop.destination_zone_id
@@ -108,6 +113,7 @@ def schedule_parcel_deliveries(
                     destination_zone_id=origin_zone_id,
                     n_parcels=0,
                     vehicle_id=vehicle.vehicle_id,
+                    departure_hour=departure_hour,
                 )
             )
 
@@ -276,6 +282,11 @@ def _select_vehicle(n_parcels: int, vehicles_sorted: list[Vehicle]) -> Vehicle:
         if v.max_parcels >= n_parcels:
             return v
     return vehicles_sorted[-1]
+
+
+def _sample_hour(dist: list[float], rng: np.random.Generator) -> int:
+    """Sample a departure hour from a 24-value cumulative distribution."""
+    return int(min(np.searchsorted(dist, rng.random()), 23))
 
 
 def _resolve_config(config: ParcelSchedulingConfig | None) -> ParcelSchedulingConfig:

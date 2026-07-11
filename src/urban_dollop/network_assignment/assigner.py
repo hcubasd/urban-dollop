@@ -72,7 +72,7 @@ def assign_network(
         _, pred = dijkstra(graph, indices=orig_idx, return_predecessors=True)
         predecessors_by_origin[orig_idx] = pred
 
-    counts: dict[tuple[int, int], int] = defaultdict(int)
+    counts: dict[tuple[int, int, int | None], int] = defaultdict(int)
 
     for trip in trips:
         orig_node = zone_to_node[trip.origin_zone_id]
@@ -87,7 +87,7 @@ def assign_network(
 
         route_links = _trace_route(orig_idx, dest_idx, pred, link_lookup)
         for link in route_links:
-            counts[(link.link_id, trip.vehicle_id)] += 1
+            counts[(link.link_id, trip.vehicle_id, trip.departure_hour)] += 1
 
     link_attrs: dict[int, NetworkLink] = {l.link_id: l for l in links}
 
@@ -98,9 +98,13 @@ def assign_network(
             distance_m=link_attrs[link_id].distance_m,
             grade_pct=link_attrs[link_id].grade_pct,
             vehicle_id=vehicle_id,
+            hour=hour,
             n_trips=n_trips,
         )
-        for (link_id, vehicle_id), n_trips in sorted(counts.items())
+        for (link_id, vehicle_id, hour), n_trips in sorted(
+            counts.items(),
+            key=lambda kv: (kv[0][0], kv[0][1], kv[0][2] if kv[0][2] is not None else -1),
+        )
     ]
 
 

@@ -120,3 +120,44 @@ def test_multi_hop_route(network_links, zone_nodes, vehicles):
 
     link_ids = {r.link_id for r in result}
     assert link_ids == {1, 2, 4}  # links 1→2, 2→3, 3→4
+
+
+def test_without_departure_hour_loaded_link_hour_is_none(network_links, zone_nodes, vehicles):
+    trips = [make_trip(1, 3)]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+    assert all(r.hour is None for r in result)
+
+
+def test_departure_hour_disaggregates_by_hour(network_links, zone_nodes, vehicles):
+    trip_h6 = DeliveryTrip(
+        tour_id=1, trip_id=1, carrier="alpha",
+        origin_zone_id=1, destination_zone_id=3,
+        n_parcels=5, vehicle_id=1, departure_hour=6,
+    )
+    trip_h8 = DeliveryTrip(
+        tour_id=2, trip_id=1, carrier="alpha",
+        origin_zone_id=1, destination_zone_id=3,
+        n_parcels=5, vehicle_id=1, departure_hour=8,
+    )
+    result = assign_network([trip_h6, trip_h8], network_links, zone_nodes, vehicles)
+
+    link1_rows = [r for r in result if r.link_id == 1]
+    assert len(link1_rows) == 2
+    assert {r.hour for r in link1_rows} == {6, 8}
+    assert all(r.n_trips == 1 for r in link1_rows)
+
+
+def test_same_hour_trips_accumulate(network_links, zone_nodes, vehicles):
+    trips = [
+        DeliveryTrip(
+            tour_id=i, trip_id=1, carrier="alpha",
+            origin_zone_id=1, destination_zone_id=3,
+            n_parcels=5, vehicle_id=1, departure_hour=7,
+        )
+        for i in range(1, 4)
+    ]
+    result = assign_network(trips, network_links, zone_nodes, vehicles)
+
+    link1 = next(r for r in result if r.link_id == 1)
+    assert link1.hour == 7
+    assert link1.n_trips == 3

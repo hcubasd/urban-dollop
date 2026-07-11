@@ -10,6 +10,7 @@ class LoadedLink(BaseModel):
     distance_m: float
     grade_pct: float
     vehicle_id: int
+    hour: int | None = None
     n_trips: int
 
     @classmethod

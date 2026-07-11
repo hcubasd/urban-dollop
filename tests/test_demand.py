@@ -170,7 +170,9 @@ def test_logit_config_raises_for_wrong_mu_length():
     with pytest.raises(Exception, match="mu_thresholds"):
         LogitDemandConfig(
             beta_urbanization={1: 0.0},
-            mu_thresholds=[1.0, 2.0],  # should be 8 for default 9 parcel levels
+            mu_thresholds=[1.0, 2.0],  # 2 thresholds requires 3 parcel levels
+            parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
+            monthly_to_daily_divisor=60.0,
         )
 
 
@@ -186,6 +188,8 @@ def test_logit_higher_urbanization_produces_more_demand(depots, carriers, skim):
     config = LogitDemandConfig(
         beta_urbanization={1: 0.0, 2: 2.0},
         mu_thresholds=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
+        monthly_to_daily_divisor=60.0,
     )
     low_total = sum(
         d.n_parcels

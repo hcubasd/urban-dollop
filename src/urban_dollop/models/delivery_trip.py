@@ -25,6 +25,7 @@ class DeliveryTrip(BaseModel):
     destination_zone_id: int
     n_parcels: int
     vehicle_id: int
+    departure_hour: int | None = None
 
     @classmethod
     def from_file(cls, path: str | Path, columns: dict[str, str] = {}) -> list[Self]:
