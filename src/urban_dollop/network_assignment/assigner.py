@@ -27,7 +27,7 @@ def assign_network(
     at least one trip.
 
     Args:
-        trips: Output of schedule_parcel_deliveries().
+        trips: Trip legs from any upstream scheduler (parcel, freight, service).
         links: Road network links. Directed; distance_m is the edge weight.
         zone_nodes: Maps each zone_id to its network gateway node_id.
         vehicles: Vehicle types (used to validate vehicle_id references).
@@ -144,7 +144,7 @@ def _validate_zone_coverage(
     }
     if missing:
         raise ValueError(
-            f"Zone IDs {sorted(missing)} appear in delivery_trips but have no "
+            f"Zone IDs {sorted(missing)} appear in trips but have no "
             "entry in zone_nodes. Add a gateway node for each zone."
         )
 
@@ -156,6 +156,6 @@ def _validate_vehicle_ids(
     missing = {t.vehicle_id for t in trips if t.vehicle_id not in vehicle_ids}
     if missing:
         raise ValueError(
-            f"Vehicle IDs {sorted(missing)} appear in delivery_trips but are "
+            f"Vehicle IDs {sorted(missing)} appear in trips but are "
             "not in the vehicles list."
         )

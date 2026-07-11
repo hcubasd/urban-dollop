@@ -26,13 +26,13 @@ def run_assign_network(input_dir: str, outdir: str | None = None) -> int:
         )
 
     output_path = _resolve_output_path(outdir)
-    trips_path = require_file(scenario_dir / "delivery_trips.csv")
+    trip_files = _collect_trip_files(scenario_dir)
     links_path = _require_network_links_file(scenario_dir)
     zone_nodes_path = require_file(scenario_dir / "zone_nodes.csv")
     vehicles_path = require_file(scenario_dir / "vehicles.csv")
 
     try:
-        trips = DeliveryTrip.from_file(trips_path)
+        trips = [t for f in trip_files for t in DeliveryTrip.from_file(f)]
         links = NetworkLink.from_file(links_path)
         zone_nodes = ZoneNode.from_file(zone_nodes_path)
         vehicles = Vehicle.from_file(vehicles_path)
@@ -47,8 +47,9 @@ def run_assign_network(input_dir: str, outdir: str | None = None) -> int:
     except (FileNotFoundError, ValueError) as exc:
         raise CLIError(str(exc)) from exc
 
+    n_files = len(trip_files)
     LoadedLink.to_file(result, output_path)
-    print(f"Wrote {len(result)} loaded link records to {output_path}")
+    print(f"Loaded {len(trips)} trips from {n_files} file(s); wrote {len(result)} loaded link records to {output_path}")
     return 0
 
 
@@ -71,6 +72,16 @@ def _resolve_output_path(outdir: str | None) -> Path:
         f"Output path does not exist: {path}. "
         "Pass an existing directory or a .csv file path whose parent directory already exists."
     )
+
+
+def _collect_trip_files(scenario_dir: Path) -> list[Path]:
+    files = sorted(scenario_dir.glob("*_trips.csv"))
+    if not files:
+        raise CLIError(
+            f"No *_trips.csv files found in {scenario_dir}. "
+            "Run schedule-deliveries (or another scheduler) first."
+        )
+    return files
 
 
 def _require_network_links_file(scenario_dir: Path) -> Path:

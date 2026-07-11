@@ -354,7 +354,7 @@ Assigns parcel demand to vehicle tours. Groups demand by `(origin_zone, carrier)
 clusters delivery stops spatially, and assigns a vehicle type by capacity.
 Returns one row per tour leg.
 
-**Canonical output — `delivery_trips.csv`:**
+**Canonical output — `parcel_trips.csv`:**
 
 | field | type | description |
 |---|---|---|
@@ -402,7 +402,7 @@ urban-dollop schedule-deliveries --outdir results/ data/
 ```
 
 Reads `zones.gpkg`, `vehicles.csv`, `skim_distance.mtx`, and `parcel_demand.csv`
-from `data/`. `zones.csv` is also accepted. Writes `delivery_trips.csv` to the
+from `data/`. `zones.csv` is also accepted. Writes `parcel_trips.csv` to the
 current directory by default.
 
 **Python API:**
@@ -425,18 +425,18 @@ trips = schedule_parcel_deliveries(
     zones=zones,
     config=ParcelSchedulingConfig(seed=42),
 )
-DeliveryTrip.to_file(trips, "delivery_trips.csv")
+DeliveryTrip.to_file(trips, "parcel_trips.csv")
 ```
 
 ---
 
 ### assign-network
 
-Assigns delivery trips to road network links via shortest-path routing. For
-each trip leg in `delivery_trips.csv`, finds the minimum-distance path through
-the road network using Dijkstra's algorithm and accumulates vehicle traversal
-counts per link. Returns one row per `(link_id, vehicle_id)` pair that carries
-at least one trip.
+Assigns trip legs to road network links via shortest-path routing. For each
+trip leg produced by any upstream scheduler, finds the minimum-distance path
+through the road network using Dijkstra's algorithm and accumulates vehicle
+traversal counts per link. Returns one row per `(link_id, vehicle_id)` pair
+that carries at least one trip.
 
 **Canonical output — `loaded_links.csv`:**
 
@@ -453,7 +453,7 @@ at least one trip.
 
 | file | field | type | description |
 |---|---|---|---|
-| `delivery_trips.csv` | *(all fields)* | — | output of `schedule-deliveries` |
+| `*_trips.csv` | *(all fields)* | — | one or more trip files from upstream schedulers (e.g. `parcel_trips.csv`, `freight_trips.csv`) |
 | `network_links.gpkg` | `link_id` | `int` | unique link identifier |
 | `network_links.gpkg` | `from_node_id` | `int` | origin node |
 | `network_links.gpkg` | `to_node_id` | `int` | destination node |
@@ -489,9 +489,10 @@ urban-dollop assign-network data/
 urban-dollop assign-network --outdir results/ data/
 ```
 
-Reads `delivery_trips.csv`, `network_links.gpkg` (or `.csv`), `zone_nodes.csv`,
-and `vehicles.csv` from `data/`. Writes `loaded_links.csv` to the current
-directory by default.
+Reads all `*_trips.csv` files found in `data/`, plus `network_links.gpkg` (or
+`.csv`), `zone_nodes.csv`, and `vehicles.csv`. Writes `loaded_links.csv` to
+the current directory by default. Multiple trip files (parcel, freight, service)
+are concatenated automatically.
 
 **Python API:**
 
@@ -501,7 +502,7 @@ from urban_dollop import (
     Vehicle, ZoneNode, assign_network,
 )
 
-trips = DeliveryTrip.from_file("delivery_trips.csv")
+trips = DeliveryTrip.from_file("parcel_trips.csv")
 links = NetworkLink.from_file("network_links.gpkg")
 zone_nodes = ZoneNode.from_file("zone_nodes.csv")
 vehicles = Vehicle.from_file("vehicles.csv")

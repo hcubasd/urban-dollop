@@ -12,7 +12,7 @@ from urban_dollop import (
 )
 from urban_dollop.cli.generate_demand import CLIError, require_file, require_spatial_file
 
-DEFAULT_OUTPUT_FILENAME = "delivery_trips.csv"
+DEFAULT_OUTPUT_FILENAME = "parcel_trips.csv"
 
 
 def run_schedule_deliveries(input_dir: str, outdir: str | None = None) -> int:
@@ -52,7 +52,7 @@ def run_schedule_deliveries(input_dir: str, outdir: str | None = None) -> int:
         raise CLIError(str(exc)) from exc
 
     DeliveryTrip.to_file(trips, output_path)
-    print(f"Wrote {len(trips)} delivery trip legs to {output_path}")
+    print(f"Wrote {len(trips)} trip legs to {output_path}")
     return 0
 
 

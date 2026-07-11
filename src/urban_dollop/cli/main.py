@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     schedule_deliveries.add_argument(
         "--outdir",
-        help="Existing output directory or a .csv file path. Defaults to delivery_trips.csv in the current working directory.",
+        help="Existing output directory or a .csv file path. Defaults to parcel_trips.csv in the current working directory.",
     )
     schedule_deliveries.set_defaults(
         handler=lambda args: run_schedule_deliveries(args.input_dir, args.outdir)
@@ -92,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     assign_network_cmd.add_argument(
         "input_dir",
-        help="Directory containing delivery_trips.csv, network_links.gpkg (or .csv), zone_nodes.csv, and vehicles.csv.",
+        help="Directory containing one or more *_trips.csv files, network_links.gpkg (or .csv), zone_nodes.csv, and vehicles.csv.",
     )
     assign_network_cmd.add_argument(
         "--outdir",
