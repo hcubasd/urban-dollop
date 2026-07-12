@@ -51,7 +51,11 @@ def run_generate_demand(
         carriers = Carrier.from_file(carriers_path)
 
         if logit:
-            zones = LogitZone.from_file(zones_path)
+            strata_path = scenario_dir / "population_strata.csv"
+            zones = LogitZone.from_file(
+                zones_path,
+                strata_path=strata_path if strata_path.exists() else None,
+            )
             skim = SkimMatrix.from_file(skim_path, zones)
             config = _load_logit_config(config_path)
             demands = generate_logit_demand(

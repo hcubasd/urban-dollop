@@ -197,13 +197,20 @@ $$D = \frac{1}{T} \sum_a \sum_i n_{ai} \sum_k p_k(\eta_{ai}) \cdot L_k$$
 
 **Zone inputs (replaces `households` and `employment`):**
 
-| field | type | description |
-|---|---|---|
-| `population` | `float` | total resident population |
-| `urbanization_level` | `int` | integer urbanization class matching a key in `beta_urbanization` |
+| file | field | type | description |
+|---|---|---|---|
+| `zones.gpkg` | `population` | `float` | total resident population |
+| `zones.gpkg` | `urbanization_level` | `int` | integer urbanization class matching a key in `beta_urbanization` |
+| `population_strata.csv` | `zone_id` | `int` | zone this row belongs to |
+| `population_strata.csv` | `age_cohort` | `int` | age cohort identifier matching a key in `beta_age` |
+| `population_strata.csv` | `income_bracket` | `int` | income bracket identifier matching a key in `beta_income` |
+| `population_strata.csv` | `population` | `float` | resident count for this zone × cohort × bracket cell |
 
-All other canonical inputs (`depots.gpkg`, `carrier_shares.csv`, `skim_time.mtx`)
-and the canonical output are identical to the linear formulation.
+`population_strata.csv` is optional. When present, the CLI and Python API use
+the full stratified formulation; when absent, the model uses total population
+and urbanization level only. All other canonical inputs (`depots.gpkg`,
+`carrier_shares.csv`, `skim_time.mtx`) and the canonical output are identical
+to the linear formulation.
 
 **Config — `[parcel_demand_logit]` in `urban-dollop.toml`:**
 
@@ -219,12 +226,16 @@ and the canonical output are identical to the linear formulation.
 mu_thresholds = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
 parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]
 monthly_to_daily_divisor = 60.0
+# beta_age = {1 = -0.2, 2 = 0.3}
+# beta_income = {1 = -0.5, 2 = 0.0, 3 = 0.8}
 # calibration_target = 50000
 ```
 
-`mu_thresholds` must have exactly `len(parcel_levels) - 1` entries. All values
-are study-area specific and must be estimated from a local household survey. The
-Dutch HARMONY v3 values shown above are for reference only.
+`mu_thresholds` must have exactly `len(parcel_levels) - 1` entries. `beta_age`
+and `beta_income` are required when `population_strata.csv` is provided; both
+must be set together or both omitted. All values are study-area specific and
+must be estimated from a local household survey — the Dutch HARMONY v3 values
+shown above are for reference only.
 
 **CLI (add `--logit`):**
 
@@ -233,27 +244,22 @@ urban-dollop generate-demand --logit data/
 urban-dollop generate-demand --logit --outdir results/ data/
 ```
 
+Drop `population_strata.csv` into the data directory alongside `zones.gpkg` to
+activate the stratified formulation automatically. If the file is absent the
+urbanization-only formulation is used.
+
 **Python API:**
 
-The full formulation supports demographic stratification: when zone population is
-broken down by age cohort and income bracket, the linear predictor becomes
-$\eta = \beta_{\text{age}}[a] + \beta_{\text{income}}[i] + \beta_u$, summed
-over each demographic cell weighted by its population count.
-
 ```python
-from urban_dollop import LogitZone, Depot, Carrier, SkimMatrix
-from urban_dollop import generate_logit_demand, LogitDemandConfig, ParcelDemand
+from urban_dollop import (
+    LogitZone, Depot, Carrier, SkimMatrix,
+    generate_logit_demand, LogitDemandConfig, ParcelDemand,
+)
 
-zones = [
-    LogitZone(
-        zone_id=1, population=5000, urbanization_level=2,
-        population_strata={
-            1: {1: 800.0, 2: 600.0, 3: 400.0},   # age cohort 1, income brackets 1–3
-            2: {1: 900.0, 2: 1100.0, 3: 1200.0},  # age cohort 2, income brackets 1–3
-        },
-    ),
-    # ...
-]
+zones = LogitZone.from_file(
+    "zones.gpkg",
+    strata_path="population_strata.csv",
+)
 depots = Depot.from_file("depots.gpkg")
 carriers = Carrier.from_file("carrier_shares.csv")
 skim = SkimMatrix.from_file("skim_time.mtx", zones)
@@ -272,11 +278,8 @@ demands = generate_logit_demand(
 ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
 
-When demographic stratification data is not available, omit `beta_age`,
-`beta_income`, and `population_strata` — the model falls back to urbanization
-level only, and zones can be loaded from file:
-`LogitZone.from_file("zones.gpkg")`. `population_strata` is only supported via
-the Python API.
+Omit `strata_path`, `beta_age`, and `beta_income` to use urbanization level
+only — zones then load from file with `LogitZone.from_file("zones.gpkg")`.
 
 ---
 
