@@ -173,10 +173,22 @@ orders at most $L_k$ parcels per month is:
 $$P(X \leq L_k) = \frac{1}{1 + e^{\,\eta - \mu_k}}$$
 
 The `mu_thresholds` $(\mu_k)$ are the cut-points separating adjacent levels on
-the latent scale — one per level except the last. Expected monthly parcels per
-person is the probability-weighted sum of category values; daily zone demand is
-that expectation multiplied by zone population and divided by
-`monthly_to_daily_divisor`.
+the latent scale — one per level except the last. Cell probabilities follow as
+consecutive differences of the cumulative distribution:
+
+$$p_k = P(X \leq L_k) - P(X \leq L_{k-1}), \quad P(X \leq L_{-1}) = 0$$
+
+Expected monthly parcels per person is the probability-weighted sum over all
+levels, and daily zone demand scales that by population:
+
+$$D = \frac{\text{population}}{\text{monthly\_to\_daily\_divisor}} \sum_k p_k \cdot L_k$$
+
+This makes each parameter concrete: `parcel_levels` supplies the $L_k$ values,
+`mu_thresholds` controls how the probability mass distributes across them, and
+`monthly_to_daily_divisor` converts the survey period to daily demand. When
+demographic stratification is used, the same equations apply per age × income
+cell with $\eta_{ai} = \beta_\text{age}[a] + \beta_\text{income}[i] + \beta_u$,
+and zone demand sums over all cells weighted by their population count $n_{ai}$.
 
 **Zone inputs (replaces `households` and `employment`):**
 
@@ -191,8 +203,14 @@ and the canonical output are identical to the linear formulation.
 **Config — `[parcel_demand_logit]` in `urban-dollop.toml`:**
 
 ```toml
+[parcel_demand_logit.beta_urbanization]
+1 = 2.0
+2 = 1.2
+3 = 0.4
+4 = -0.3
+5 = -1.0
+
 [parcel_demand_logit]
-beta_urbanization = {1 = 2.0, 2 = 1.2, 3 = 0.4, 4 = -0.3, 5 = -1.0}
 mu_thresholds = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
 parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]
 monthly_to_daily_divisor = 60.0
