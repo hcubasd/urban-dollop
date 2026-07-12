@@ -170,7 +170,7 @@ defines the ordered categories of monthly parcel volume a resident can belong to
 the linear predictor is $\eta = \beta_u$, and the probability that a resident
 orders at most $L_k$ parcels per month is:
 
-$$P(X \leq L_k) = \frac{1}{1 + e^{\,\eta - \mu_k}}$$
+$$P(X \leq L_k) = \frac{1}{1 + e^{\eta - \mu_k}}$$
 
 The `mu_thresholds` $(\mu_k)$ are the cut-points separating adjacent levels on
 the latent scale — one per level except the last. Cell probabilities follow as
