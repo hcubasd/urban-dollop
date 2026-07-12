@@ -283,9 +283,15 @@ Consolidation Centres. Each rerouted flow is split into two legs: leg A
 (origin → nearest UCC) and leg B (UCC → original destination). Non-catchment
 parcels pass through unchanged.
 
-The nearest UCC is selected per demand record by minimising total two-leg
+The nearest UCC is selected per demand record by minimising total two-leg road
 distance: `dist(origin → UCC) + dist(UCC → destination)`. UCCs are
 carrier-agnostic — any carrier's parcels can be rerouted through any UCC.
+
+**Canonical output — `parcel_demand.csv`:**
+
+The output schema is identical to the input `parcel_demand.csv`. Rerouted flows
+appear as two rows (depot → UCC and UCC → destination) replacing the original
+single row; direct flows are unchanged.
 
 **Canonical inputs:**
 
@@ -348,14 +354,23 @@ ParcelDemand.to_file(result, "parcel_demand.csv")
 
 ### consolidate-microhubs
 
-Reroutes all parcels destined for zero-emission zones through carrier-specific
-microhubs. Each flow is split into two legs: leg A (origin → nearest microhub)
-and leg B (microhub → original destination, zero-emission last mile).
-Non-ZEZ parcels pass through unchanged.
+Reroutes all parcels destined for zero-emission zones (ZEZs) through
+carrier-specific microhubs. Each flow is split into two legs: leg A
+(origin → nearest microhub) and leg B (microhub → destination, zero-emission
+last mile). Non-ZEZ parcels pass through unchanged.
 
-The nearest microhub is carrier-specific and selected by minimising last-mile
-distance: `dist(microhub → destination)`. Every carrier with ZEZ-destined
-parcels must have at least one microhub configured.
+Unlike UCC consolidation, rerouting is unconditional — every ZEZ-bound parcel
+is transferred at probability 1, since the constraint is a regulatory
+requirement. Microhubs are also carrier-specific: a carrier's parcels can only
+be routed through that carrier's facilities. The nearest microhub is selected by
+minimising last-mile distance only: `dist(microhub → destination)`. Every
+carrier with ZEZ-destined parcels must have at least one microhub configured.
+
+**Canonical output — `parcel_demand.csv`:**
+
+The output schema is identical to the input `parcel_demand.csv`. ZEZ-bound flows
+appear as two rows (depot → microhub and microhub → destination) replacing the
+original; non-ZEZ flows are unchanged.
 
 **Canonical inputs:**
 
@@ -408,9 +423,19 @@ ParcelDemand.to_file(result, "parcel_demand.csv")
 
 ### schedule-deliveries
 
-Assigns parcel demand to vehicle tours. Groups demand by `(origin_zone, carrier)`,
-clusters delivery stops spatially, and assigns a vehicle type by capacity.
-Returns one row per tour leg.
+Converts the flat parcel demand table into vehicle delivery tours. For each
+`(depot zone, carrier)` pair, it groups destination zones into
+capacity-constrained tours, sequences stops within each tour to minimise
+driving distance, and assigns a vehicle type. Returns one row per tour leg.
+
+Demand records that meet or exceed the largest vehicle capacity are assigned
+dedicated full-load tours immediately. Remaining records are grouped
+iteratively: the destination furthest from the depot seeds each new cluster,
+and the nearest unassigned destinations are added until the cluster fills
+(furthest-seed, nearest-fill). Stop order within each cluster is then improved
+by 2-opt: pairs of positions are reversed if doing so reduces total distance,
+with passes repeating until no swap helps. The smallest vehicle whose capacity
+meets the tour load is selected from the configured fleet.
 
 **Canonical output — `parcel_trips.csv`:**
 
@@ -449,12 +474,21 @@ The scheduler assigns the smallest vehicle whose capacity fits the tour load.
 ```toml
 [parcel_scheduling]
 # seed = 42
-# departure_time_distribution = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.3, 0.6, 0.85, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+# departure_time_distribution = [
+#     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,   # hours 0–5 (no departures)
+#     0.1, 0.3, 0.6, 0.85, 0.95, 1.0, # hours 6–11 (morning peak)
+#     1.0, 1.0, 1.0, 1.0, 1.0, 1.0,   # hours 12–17 (all departed)
+#     1.0, 1.0, 1.0, 1.0, 1.0, 1.0,   # hours 18–23
+# ]
 ```
 
-`seed` is optional; set it to make tour clustering and departure time sampling reproducible.
-
-`departure_time_distribution` is optional. When omitted, no departure hours are assigned and `parcel_trips.csv` will not contain a `departure_hour` column. When provided, it must be a 24-element array of cumulative hourly shares (non-decreasing, last value exactly 1.0). Each tour is assigned a departure hour sampled from this distribution; all legs of the same tour share that hour. This enables hourly traffic intensity reporting in downstream modules.
+`seed` is optional; set it to make tour clustering and departure time sampling
+reproducible. `departure_time_distribution` is optional; when omitted,
+`departure_hour` is absent from the output and trips are treated as
+time-invariant. When provided, it must be a 24-element array of cumulative
+hourly shares (non-decreasing, last value exactly 1.0). Each tour draws a
+departure hour from this distribution; all legs of the same tour share that
+hour, enabling hourly traffic intensity reporting downstream.
 
 **CLI:**
 
@@ -471,7 +505,8 @@ current directory by default.
 
 ```python
 from urban_dollop import (
-    DeliveryTrip, ParcelDemand, ParcelSchedulingConfig, SkimDistance, Vehicle, Zone,
+    DeliveryTrip, ParcelDemand, ParcelSchedulingConfig,
+    SkimDistance, Vehicle, Zone,
     schedule_parcel_deliveries,
 )
 
@@ -488,6 +523,26 @@ trips = schedule_parcel_deliveries(
     config=ParcelSchedulingConfig(seed=42),
 )
 DeliveryTrip.to_file(trips, "parcel_trips.csv")
+```
+
+With a departure time distribution, pass it as a 24-element list of cumulative
+hourly shares. Each tour is assigned a departure hour sampled from this
+distribution; the `departure_hour` column appears in the output.
+
+```python
+peak = [0.1, 0.3, 0.6, 0.85, 0.95, 1.0]
+tod = [0.0] * 6 + peak + [1.0] * 12   # morning peak, all departed by noon
+
+trips = schedule_parcel_deliveries(
+    demands=demands,
+    vehicles=vehicles,
+    skim_distance=skim_distance,
+    zones=zones,
+    config=ParcelSchedulingConfig(
+        seed=42,
+        departure_time_distribution=tod,
+    ),
+)
 ```
 
 ---
@@ -624,19 +679,23 @@ topography in emission accounting.
 | `emission_factors.csv` | `eta` | `float` | COPERT V polynomial coefficient |
 | `emission_factors.csv` | `rf` | `float` | deterioration correction factor (0.0 = no correction) |
 
-The COPERT V formula is:
+The emission factor (g/km) for a given speed $V$ (km/h) follows the COPERT V
+polynomial:
 
-```
-EF [g/km] = (α·V² + β·V + γ + δ/V) / (ε·V² + ζ·V + η) · (1 − RF)
-```
+$$\mathrm{EF}(V) = \frac{\alpha V^2 + \beta V + \gamma + \delta/V}{\varepsilon V^2 + \zeta V + \eta} \cdot (1 - \mathrm{RF})$$
 
-where V is speed in km/h from the config. For non-exhaust PM (tyre, brake, road
-wear), set `alpha=beta=delta=0`, `epsilon=zeta=0`, `eta=1` and encode the
-constant wear rate in `gamma`.
+where $\alpha$–$\eta$ are vehicle- and pollutant-specific regression
+coefficients and RF is a deterioration correction factor. Total emissions for a
+link are then $E = n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$.
 
-Every `(vehicle_id, pollutant)` combination must cover the full Cartesian
-product of gradient and load bins present in `emission_factors.csv`. Grade is
-clamped to the range of gradient bins when the actual value falls outside.
+For non-exhaust PM (tyre, brake, road wear), the polynomial reduces to a
+constant rate — set $\alpha = \beta = \delta = 0$, $\varepsilon = \zeta = 0$,
+$\eta = 1$ and encode the wear rate in $\gamma$.
+
+The library interpolates bilinearly across both gradient and load bins rather
+than snapping to the nearest bin. Grade values outside the bin range are
+clamped. Every `(vehicle_id, pollutant)` combination must cover the full
+Cartesian product of gradient and load bins in `emission_factors.csv`.
 
 **Config — `[emission_calculation]` in `urban-dollop.toml`:**
 
