@@ -73,6 +73,17 @@ carrier)` triple.
 | `carrier` | `str` | carrier name |
 | `n_parcels` | `int` | number of parcels |
 
+#### Linear formulation
+
+Demand for each zone is proportional to its household and employment counts:
+
+$$D = \frac{H \cdot r_\text{B2C}}{s_\text{B2C}} + \frac{E \cdot r_\text{B2B}}{s_\text{B2B}}$$
+
+$H$ is household count, $E$ is employment count, $r$ is a daily parcel rate per
+person or employee, and $s$ is delivery success rate — the fraction of
+first-attempt deliveries that succeed. Dividing by $s$ inflates demand upward to
+account for parcels that require a re-delivery attempt.
+
 **Canonical inputs:**
 
 | file | field | type | description |
@@ -86,10 +97,10 @@ carrier)` triple.
 | `carrier_shares.csv` | `name` | `str` | carrier name |
 | `carrier_shares.csv` | `share` | `float` | market share fraction (all shares must sum to 1.0) |
 
-`zones.gpkg` and `depots.gpkg` also accept `.csv` if you don't have GeoPackage
-files. Also requires a `skim_time.mtx` binary skim matrix: flat float32 values,
-N² elements, one per zone pair in zone file order. A gzip-compressed
-`skim_time.mtx.gz` is also accepted.
+`zones.gpkg` and `depots.gpkg` also accept `.csv`. Also requires a
+`skim_time.mtx` binary skim matrix: flat float32 values, N² elements, one per
+zone pair in zone file order. A gzip-compressed `skim_time.mtx.gz` is also
+accepted.
 
 **Config — `[parcel_demand]` in `urban-dollop.toml`:**
 
@@ -114,8 +125,7 @@ urban-dollop generate-demand --outdir results/ data/
 ```
 
 Reads `zones.gpkg`, `depots.gpkg`, `carrier_shares.csv`, and `skim_time.mtx`
-from `data/`. `.csv` is also accepted for zones and depots. Writes
-`parcel_demand.csv` to the current directory by default.
+from `data/`. Writes `parcel_demand.csv` to the current directory by default.
 
 **Python API:**
 
@@ -151,23 +161,34 @@ names to the expected field names. All other API calls support it the same way.
 #### Ordered logit formulation
 
 Use `--logit` when your zone data has population and an integer urbanization
-classification instead of household and employment counts. Demand is derived
-from an ordered logit over urbanization level following the HARMONY v3
-formulation. All inputs, outputs, and config options are identical to the linear
-formulation except for the following.
+classification rather than household and employment counts. This formulation is
+adapted from the HARMONY v3 demand model.
 
-Zone attributes required (instead of `households` and `employment`):
+The model treats parcel ordering as an ordered discrete choice. `parcel_levels`
+defines the ordered categories of monthly parcel volume a resident can belong to
+(e.g. 0, 1, 2, … parcels per month). For a zone with urbanization class $u$,
+the linear predictor is $\eta = \beta_u$, and the probability that a resident
+orders at most $L_k$ parcels per month is:
+
+$$P(X \leq L_k) = \frac{1}{1 + e^{\,\eta - \mu_k}}$$
+
+The `mu_thresholds` $(\mu_k)$ are the cut-points separating adjacent levels on
+the latent scale — one per level except the last. Expected monthly parcels per
+person is the probability-weighted sum of category values; daily zone demand is
+that expectation multiplied by zone population and divided by
+`monthly_to_daily_divisor`.
+
+**Zone inputs (replaces `households` and `employment`):**
 
 | field | type | description |
 |---|---|---|
 | `population` | `float` | total resident population |
-| `urbanization_level` | `int` | integer urbanization class |
+| `urbanization_level` | `int` | integer urbanization class matching a key in `beta_urbanization` |
 
-A `zones.gpkg` with all five columns works for both formulations — each loads
-only what it needs. A `zones.csv` with the same columns works equally.
+All other canonical inputs (`depots.gpkg`, `carrier_shares.csv`, `skim_time.mtx`)
+and the canonical output are identical to the linear formulation.
 
-Config uses a separate section — `[parcel_demand_logit]` instead of
-`[parcel_demand]`:
+**Config — `[parcel_demand_logit]` in `urban-dollop.toml`:**
 
 ```toml
 [parcel_demand_logit]
@@ -178,55 +199,28 @@ monthly_to_daily_divisor = 60.0
 # calibration_target = 50000
 ```
 
-All four of `beta_urbanization`, `mu_thresholds`, `parcel_levels`, and
-`monthly_to_daily_divisor` are required. No defaults are provided — all
-parameters must be estimated from a household survey for your study area.
-The Dutch HARMONY v3 values shown above are for reference only and are
-**not** appropriate for other countries without re-estimation.
+`mu_thresholds` must have exactly `len(parcel_levels) - 1` entries. All values
+are study-area specific and must be estimated from a local household survey. The
+Dutch HARMONY v3 values shown above are for reference only.
 
-**Demographic stratification (optional):** When zone-level population broken
-down by age cohort and income bracket is available, the full MASS-GT logit
-formulation can be used. Supply `beta_age` and `beta_income` in the config
-(both required together or neither) and add `population_strata` to each
-`LogitZone` in the Python API. The linear predictor becomes
-`eta = beta_age[a] + beta_income[i] + beta_urbanization[sted]` summed over
-all demographic cells. Without strata, the model uses `beta_urbanization`
-and total zone population only.
-
-Add `--logit` to the CLI command; everything else is identical:
+**CLI (add `--logit`):**
 
 ```bash
 urban-dollop generate-demand --logit data/
 urban-dollop generate-demand --logit --outdir results/ data/
 ```
 
-**Python API (urbanization only):**
+**Python API:**
+
+The full formulation supports demographic stratification: when zone population is
+broken down by age cohort and income bracket, the linear predictor becomes
+$\eta = \beta_{\text{age}}[a] + \beta_{\text{income}}[i] + \beta_u$, summed
+over each demographic cell weighted by its population count.
 
 ```python
 from urban_dollop import LogitZone, Depot, Carrier, SkimMatrix
 from urban_dollop import generate_logit_demand, LogitDemandConfig, ParcelDemand
 
-zones = LogitZone.from_file("zones.gpkg")
-depots = Depot.from_file("depots.gpkg")
-carriers = Carrier.from_file("carrier_shares.csv")
-skim = SkimMatrix.from_file("skim_time.mtx", zones)
-
-demands = generate_logit_demand(
-    zones, depots, carriers, skim,
-    config=LogitDemandConfig(
-        beta_urbanization={1: 2.0, 2: 1.2, 3: 0.4, 4: -0.3, 5: -1.0},
-        mu_thresholds=[-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0],
-        parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
-        monthly_to_daily_divisor=60.0,
-        calibration_target=50000,
-    ),
-)
-ParcelDemand.to_file(demands, "parcel_demand.csv")
-```
-
-**Python API (full demographic stratification):**
-
-```python
 zones = [
     LogitZone(
         zone_id=1, population=5000, urbanization_level=2,
@@ -237,10 +231,14 @@ zones = [
     ),
     # ...
 ]
+depots = Depot.from_file("depots.gpkg")
+carriers = Carrier.from_file("carrier_shares.csv")
+skim = SkimMatrix.from_file("skim_time.mtx", zones)
+
 demands = generate_logit_demand(
     zones, depots, carriers, skim,
     config=LogitDemandConfig(
-        beta_urbanization={1: 0.0, 2: 0.4},
+        beta_urbanization={1: 2.0, 2: 1.2, 3: 0.4, 4: -0.3, 5: -1.0},
         beta_age={1: -0.2, 2: 0.3},
         beta_income={1: -0.5, 2: 0.0, 3: 0.8},
         mu_thresholds=[-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0],
@@ -248,10 +246,14 @@ demands = generate_logit_demand(
         monthly_to_daily_divisor=60.0,
     ),
 )
+ParcelDemand.to_file(demands, "parcel_demand.csv")
 ```
 
-`population_strata` is only supported via the Python API. CSV/GeoPackage
-loading populates `population` and `urbanization_level` only.`
+When demographic stratification data is not available, omit `beta_age`,
+`beta_income`, and `population_strata` — the model falls back to urbanization
+level only, and zones can be loaded from file:
+`LogitZone.from_file("zones.gpkg")`. `population_strata` is only supported via
+the Python API.
 
 ---
 
