@@ -696,15 +696,14 @@ and the deterioration factor RF are vehicle- and pollutant-specific. Total
 emissions for a link are $E = n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$.
 
 **How grade enters.** `emission_factors.csv` tabulates a full set of
-coefficients for each `(vehicle_id, pollutant, gradient_pct, load_pct)`
-combination. For a link with a given `grade_pct` and configured `fill_rate`,
-the library bilinearly interpolates the coefficients across the two bracketing
-`gradient_pct` bins and the two bracketing `load_pct` bins, then plugs the
-interpolated coefficients into the formula above. Grade values outside the
-tabulated bin range are clamped to the nearest bin. This per-link
-grade-sensitive interpolation — rather than a single representative speed-grade
-pair per road type — is the core improvement over the original MASS-GT
-implementation.
+coefficients for every `(vehicle_id, pollutant, gradient_pct, load_pct)`
+combination. For each tabulated load bin, the library evaluates the COPERT V
+polynomial at each tabulated gradient bin and linearly interpolates the
+resulting EF values to the link's actual `grade_pct`. Those per-load EF values
+are then linearly interpolated to the configured `fill_rate`. Grade values
+outside the tabulated bin range are clamped. This per-link grade-sensitive
+interpolation — rather than a single representative EF per road type — is the
+core improvement over the original MASS-GT implementation.
 
 For non-exhaust PM (tyre, brake, road wear), the polynomial reduces to a
 constant rate — set $\alpha = \beta = \delta = 0$, $\varepsilon = \zeta = 0$,
