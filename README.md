@@ -686,23 +686,32 @@ topography in emission accounting.
 | `emission_factors.csv` | `eta` | `float` | COPERT V polynomial coefficient |
 | `emission_factors.csv` | `rf` | `float` | deterioration correction factor (0.0 = no correction) |
 
-The emission factor (g/km) for a given speed $V$ (km/h) follows the COPERT V
-polynomial:
+The COPERT V polynomial gives emission factor (g/km) as a function of speed
+$V$ (km/h):
 
 $$\mathrm{EF}(V) = \frac{\alpha V^2 + \beta V + \gamma + \delta/V}{\varepsilon V^2 + \zeta V + \eta} \cdot (1 - \mathrm{RF})$$
 
-where $\alpha$–$\eta$ are vehicle- and pollutant-specific regression
-coefficients and RF is a deterioration correction factor. Total emissions for a
-link are then $E = n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$.
+The seven coefficients $\alpha, \beta, \gamma, \delta, \varepsilon, \zeta, \eta$
+and the deterioration factor RF are vehicle- and pollutant-specific. Total
+emissions for a link are $E = n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$.
+
+**How grade enters.** `emission_factors.csv` tabulates a full set of
+coefficients for each `(vehicle_id, pollutant, gradient_pct, load_pct)`
+combination. For a link with a given `grade_pct` and configured `fill_rate`,
+the library bilinearly interpolates the coefficients across the two bracketing
+`gradient_pct` bins and the two bracketing `load_pct` bins, then plugs the
+interpolated coefficients into the formula above. Grade values outside the
+tabulated bin range are clamped to the nearest bin. This per-link
+grade-sensitive interpolation — rather than a single representative speed-grade
+pair per road type — is the core improvement over the original MASS-GT
+implementation.
 
 For non-exhaust PM (tyre, brake, road wear), the polynomial reduces to a
 constant rate — set $\alpha = \beta = \delta = 0$, $\varepsilon = \zeta = 0$,
 $\eta = 1$ and encode the wear rate in $\gamma$.
 
-The library interpolates bilinearly across both gradient and load bins rather
-than snapping to the nearest bin. Grade values outside the bin range are
-clamped. Every `(vehicle_id, pollutant)` combination must cover the full
-Cartesian product of gradient and load bins in `emission_factors.csv`.
+Every `(vehicle_id, pollutant)` combination must cover the full Cartesian
+product of gradient and load bins present in `emission_factors.csv`.
 
 **Config — `[emission_calculation]` in `urban-dollop.toml`:**
 
