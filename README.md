@@ -181,13 +181,13 @@ $$p_k = P(X \leq L_k) - P(X \leq L_{k-1}), \quad P(X \leq L_{-1}) = 0$$
 Expected monthly parcels per person is the probability-weighted sum over all
 levels, and daily zone demand scales that by population:
 
-$$D = \frac{\text{population}}{\text{monthly\_to\_daily\_divisor}} \sum_k p_k \cdot L_k$$
+$$D = \frac{\texttt{population}}{\texttt{monthly\_to\_daily\_divisor}} \sum_k p_k \cdot L_k$$
 
 This makes each parameter concrete: `parcel_levels` supplies the $L_k$ values,
 `mu_thresholds` controls how the probability mass distributes across them, and
 `monthly_to_daily_divisor` converts the survey period to daily demand. When
 demographic stratification is used, the same equations apply per age × income
-cell with $\eta_{ai} = \beta_\text{age}[a] + \beta_\text{income}[i] + \beta_u$,
+cell with $\eta_{ai} = \beta_{\texttt{age}}[a] + \beta_{\texttt{income}}[i] + \beta_u$,
 and zone demand sums over all cells weighted by their population count $n_{ai}$.
 
 **Zone inputs (replaces `households` and `employment`):**
