@@ -186,10 +186,14 @@ $$D = \frac{N}{T} \sum_k p_k \cdot L_k$$
 
 This makes each parameter concrete: `parcel_levels` supplies the $L_k$ values,
 `mu_thresholds` controls how the probability mass distributes across them, and
-$T$ converts the survey period to a daily figure. When demographic stratification
-is used, the same equations apply per age × income cell with
+$T$ converts the survey period to a daily figure.
+
+When demographic stratification is available, the same equations apply within
+each age × income cell using a cell-specific linear predictor
 $\eta_{ai} = \beta_a[a] + \beta_i[i] + \beta_u$, and zone demand sums over all
-cells weighted by their population count $n_{ai}$.
+cells weighted by their population count $n_{ai}$:
+
+$$D = \frac{1}{T} \sum_a \sum_i n_{ai} \sum_k p_k(\eta_{ai}) \cdot L_k$$
 
 **Zone inputs (replaces `households` and `employment`):**
 
