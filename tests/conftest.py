@@ -2,10 +2,12 @@ import numpy as np
 import pytest
 
 from urban_dollop.models.carrier import Carrier
+from urban_dollop.models.emission_factor import EmissionFactor
 from urban_dollop.models.network_link import NetworkLink
 from urban_dollop.models.zone_node import ZoneNode
 from urban_dollop.models.depot import Depot
 from urban_dollop.models.linear_zone import LinearZone
+from urban_dollop.models.loaded_link import LoadedLink
 from urban_dollop.models.logit_zone import LogitZone
 from urban_dollop.consolidation.ucc_config import UCCConfig
 from urban_dollop.models.microhub import Microhub
@@ -200,6 +202,45 @@ def zone_nodes():
         ZoneNode(zone_id=2, node_id=2),
         ZoneNode(zone_id=3, node_id=3),
         ZoneNode(zone_id=4, node_id=4),
+    ]
+
+
+def _make_ef(vehicle_id, pollutant, gradient_pct, load_pct, gamma):
+    """Constant-rate emission factor (EF = gamma g/km regardless of speed)."""
+    return EmissionFactor(
+        vehicle_id=vehicle_id,
+        pollutant=pollutant,
+        gradient_pct=gradient_pct,
+        load_pct=load_pct,
+        alpha=0.0, beta=0.0, gamma=gamma,
+        delta=0.0, epsilon=0.0, zeta=0.0,
+        eta=1.0, rf=0.0,
+    )
+
+
+@pytest.fixture
+def emission_factors():
+    # Vehicle 1, CO2: 2×2 grid (gradient 0/2, load 0/100)
+    # EF values chosen so bilinear interpolation is easy to verify:
+    #   grad=0, load=0   → 100 g/km
+    #   grad=0, load=100 → 200 g/km
+    #   grad=2, load=0   → 150 g/km
+    #   grad=2, load=100 → 300 g/km
+    return [
+        _make_ef(1, "CO2", 0.0, 0.0, 100.0),
+        _make_ef(1, "CO2", 0.0, 100.0, 200.0),
+        _make_ef(1, "CO2", 2.0, 0.0, 150.0),
+        _make_ef(1, "CO2", 2.0, 100.0, 300.0),
+    ]
+
+
+@pytest.fixture
+def loaded_links_simple():
+    return [
+        LoadedLink(
+            link_id=1, road_type="urban", distance_m=1000.0,
+            grade_pct=0.0, vehicle_id=1, n_trips=1,
+        ),
     ]
 
 

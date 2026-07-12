@@ -17,7 +17,7 @@ parameters so the same pipeline can be applied to any city.
 | Parcel consolidation (UCCs + microhubs) | `parcel_dmnd` | implemented |
 | Parcel delivery scheduling | `parcel_schd` | implemented |
 | Network / route assignment | `traf` | implemented |
-| Emission calculation (COPERT V + grade) | `traf` + grade extension | planned |
+| Emission calculation (COPERT V + grade) | `traf` + grade extension | implemented |
 | KPI indicators | `outp` | planned |
 | Service trip demand | `service` | planned |
 | Freight shipment demand | `ship` | planned |
@@ -45,6 +45,7 @@ flowchart LR
     B --> D
     C --> D
     D --> E[assign-network]
+    E --> F[calculate-emissions]
 ```
 
 The consolidation steps are optional and composable — run either, both, or
@@ -556,4 +557,110 @@ result = assign_network(
     config=NetworkAssignmentConfig(seed=42),
 )
 LoadedLink.to_file(result, "loaded_links.csv")
+```
+
+---
+
+### calculate-emissions
+
+Calculates pollutant emissions for each loaded network link using COPERT V
+emission factors. For each (link, vehicle, pollutant) combination, it
+interpolates the emission factor (g/km) across both road gradient and vehicle
+load using bilinear interpolation, then multiplies by trip count and link length.
+
+Road grade flows directly from `loaded_links.csv` — the novel contribution of
+this library relative to the original MASS-GT code, which does not account for
+topography in emission accounting.
+
+**Canonical output — `link_emissions.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `link_id` | `int` | joins back to `loaded_links` |
+| `vehicle_id` | `int` | vehicle type |
+| `hour` | `int \| null` | departure hour (0–23); `null` when not disaggregated |
+| `pollutant` | `str` | pollutant name (e.g. `CO2`, `NOx`, `PM10`) |
+| `n_trips` | `int` | number of vehicle traversals |
+| `distance_m` | `float` | link length in metres |
+| `grade_pct` | `float` | average grade used in EF interpolation |
+| `emission_g` | `float` | total grams emitted: `n_trips × (distance_m/1000) × EF` |
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `loaded_links.csv` | *(all fields)* | — | output from `assign-network` |
+| `emission_factors.csv` | `vehicle_id` | `int` | vehicle type these factors apply to |
+| `emission_factors.csv` | `pollutant` | `str` | pollutant name |
+| `emission_factors.csv` | `gradient_pct` | `float` | road gradient bin (e.g. −6, −4, −2, 0, 2, 4, 6) |
+| `emission_factors.csv` | `load_pct` | `float` | vehicle load bin (0, 50, or 100) |
+| `emission_factors.csv` | `alpha` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `beta` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `gamma` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `delta` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `epsilon` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `zeta` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `eta` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `rf` | `float` | deterioration correction factor (0.0 = no correction) |
+
+The COPERT V formula is:
+
+```
+EF [g/km] = (α·V² + β·V + γ + δ/V) / (ε·V² + ζ·V + η) · (1 − RF)
+```
+
+where V is speed in km/h from the config. For non-exhaust PM (tyre, brake, road
+wear), set `alpha=beta=delta=0`, `epsilon=zeta=0`, `eta=1` and encode the
+constant wear rate in `gamma`.
+
+Every `(vehicle_id, pollutant)` combination must cover the full Cartesian
+product of gradient and load bins present in `emission_factors.csv`. Grade is
+clamped to the range of gradient bins when the actual value falls outside.
+
+**Config — `[emission_calculation]` in `urban-dollop.toml`:**
+
+```toml
+[emission_calculation]
+fill_rate = 0.5
+
+[emission_calculation.speed_kmh]
+urban = 30.0
+rural = 80.0
+highway = 120.0
+```
+
+Both `fill_rate` (vehicle load as a fraction, 0.0–1.0) and `speed_kmh` (mapping
+from `road_type` to speed) are required. Speed maps directly to the `road_type`
+values in `loaded_links.csv` — add an entry for every road type in your network.
+
+**CLI:**
+
+```bash
+urban-dollop calculate-emissions data/
+urban-dollop calculate-emissions --outdir results/ data/
+```
+
+Reads `loaded_links.csv` and `emission_factors.csv` from `data/`. Writes
+`link_emissions.csv` to the current directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    EmissionCalculationConfig, EmissionFactor, LinkEmission, LoadedLink,
+    calculate_emissions,
+)
+
+loaded_links = LoadedLink.from_file("loaded_links.csv")
+emission_factors = EmissionFactor.from_file("emission_factors.csv")
+
+result = calculate_emissions(
+    loaded_links=loaded_links,
+    emission_factors=emission_factors,
+    config=EmissionCalculationConfig(
+        speed_kmh={"urban": 30.0, "rural": 80.0, "highway": 120.0},
+        fill_rate=0.5,
+    ),
+)
+LinkEmission.to_file(result, "link_emissions.csv")
 ```

@@ -1,7 +1,9 @@
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.delivery_trip import DeliveryTrip
 from urban_dollop.models.depot import Depot
+from urban_dollop.models.emission_factor import EmissionFactor
 from urban_dollop.models.linear_zone import LinearZone
+from urban_dollop.models.link_emission import LinkEmission
 from urban_dollop.models.loaded_link import LoadedLink
 from urban_dollop.models.logit_zone import LogitZone
 from urban_dollop.models.microhub import Microhub
@@ -34,4 +36,6 @@ __all__ = [
     "NetworkLink",
     "ZoneNode",
     "LoadedLink",
+    "EmissionFactor",
+    "LinkEmission",
 ]

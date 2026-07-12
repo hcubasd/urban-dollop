@@ -4,7 +4,9 @@ from urban_dollop.models import (
     Carrier,
     DeliveryTrip,
     Depot,
+    EmissionFactor,
     LinearZone,
+    LinkEmission,
     LoadedLink,
     LogitZone,
     Microhub,
@@ -30,6 +32,7 @@ from urban_dollop.parcel_scheduling import (
     schedule_parcel_deliveries,
 )
 from urban_dollop.consolidation import UCCConfig, consolidate_microhubs, consolidate_uccs
+from urban_dollop.emission import EmissionCalculationConfig, calculate_emissions
 from urban_dollop.network_assignment import NetworkAssignmentConfig, assign_network
 
 __all__ = [
@@ -61,4 +64,8 @@ __all__ = [
     "LoadedLink",
     "NetworkAssignmentConfig",
     "assign_network",
+    "EmissionFactor",
+    "LinkEmission",
+    "EmissionCalculationConfig",
+    "calculate_emissions",
 ]

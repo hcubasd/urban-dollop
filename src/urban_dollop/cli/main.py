@@ -2,6 +2,7 @@ import argparse
 import sys
 
 from urban_dollop.cli.assign_network import run_assign_network
+from urban_dollop.cli.calculate_emissions import run_calculate_emissions
 from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
 from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
@@ -100,6 +101,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     assign_network_cmd.set_defaults(
         handler=lambda args: run_assign_network(args.input_dir, args.outdir)
+    )
+
+    calculate_emissions_cmd = subparsers.add_parser(
+        "calculate-emissions",
+        help="Calculate pollutant emissions for each loaded network link using COPERT V factors.",
+    )
+    calculate_emissions_cmd.add_argument(
+        "input_dir",
+        help="Directory containing loaded_links.csv and emission_factors.csv.",
+    )
+    calculate_emissions_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to link_emissions.csv in the current working directory.",
+    )
+    calculate_emissions_cmd.set_defaults(
+        handler=lambda args: run_calculate_emissions(args.input_dir, args.outdir)
     )
 
     return parser
