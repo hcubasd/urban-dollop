@@ -18,6 +18,9 @@ from urban_dollop.models import (
     Microhub,
     NetworkLink,
     ParcelDemand,
+    ServiceTrip,
+    ServiceTripRate,
+    ServiceVehicleShare,
     Shipment,
     ShipmentSizeClass,
     SkimDistance,
@@ -45,6 +48,7 @@ from urban_dollop.emission import EmissionCalculationConfig, calculate_emissions
 from urban_dollop.network_assignment import NetworkAssignmentConfig, assign_network
 from urban_dollop.firm_synthesis import FirmSynthesisConfig, synthesize_firms
 from urban_dollop.freight_demand import FreightDemandConfig, generate_freight_demand
+from urban_dollop.service_trips import ServiceTripConfig, generate_service_trips
 
 __all__ = [
     "Zone",
@@ -92,4 +96,9 @@ __all__ = [
     "Shipment",
     "FreightDemandConfig",
     "generate_freight_demand",
+    "ServiceTripRate",
+    "ServiceVehicleShare",
+    "ServiceTrip",
+    "ServiceTripConfig",
+    "generate_service_trips",
 ]

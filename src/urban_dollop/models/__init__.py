@@ -6,6 +6,9 @@ from urban_dollop.models.freight_total import FreightTotal
 from urban_dollop.models.freight_vehicle_params import FreightVehicleParams
 from urban_dollop.models.make_use_coefficient import MakeUseCoefficient
 from urban_dollop.models.shipment import Shipment
+from urban_dollop.models.service_trip import ServiceTrip
+from urban_dollop.models.service_trip_rate import ServiceTripRate
+from urban_dollop.models.service_vehicle_share import ServiceVehicleShare
 from urban_dollop.models.shipment_size_class import ShipmentSizeClass
 from urban_dollop.models.zone_employment import ZoneEmployment
 from urban_dollop.models.delivery_trip import DeliveryTrip
@@ -56,4 +59,7 @@ __all__ = [
     "FreightVehicleParams",
     "FreightMNLParam",
     "Shipment",
+    "ServiceTripRate",
+    "ServiceVehicleShare",
+    "ServiceTrip",
 ]

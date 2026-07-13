@@ -19,7 +19,7 @@ parameters so the same pipeline can be applied to any city.
 | Firm synthesizer | `fs` | implemented |
 | Freight shipment demand | `ship` | implemented |
 | Freight tour scheduling | `tour` | planned |
-| Service trip demand | `service` | planned |
+| Service trip demand | `service` | implemented |
 | Network / route assignment | `traf` | implemented |
 | Emission calculation (COPERT V + grade) | `traf` + grade extension | implemented |
 | KPI indicators | `outp` | planned |
@@ -827,6 +827,115 @@ shipments = generate_freight_demand(
     ),
 )
 Shipment.to_file(shipments, "shipments.csv")
+```
+
+---
+
+### generate-service-trips
+
+Generates service vehicle trips from zone employment data. Service trips
+represent discretionary vehicle movements made by service-sector workers —
+tradespeople, repair crews, construction workers — as opposed to goods
+deliveries. The module is a standalone source pipeline: it reads zone
+employment and calibrated trip rates, and writes `service_trips.csv` directly
+without a scheduling step. `service_trips.csv` is then picked up by
+`assign-network` alongside parcel and freight trips.
+
+Trip production for each origin zone is $P_i = \sum_s E_{is} \cdot r_s$,
+where $E_{is}$ is employment in sector $s$ and $r_s$ is the daily trip
+production rate for that sector. Fractional counts are resolved
+stochastically: each zone emits $\lfloor P_i \rfloor$ trips plus one
+additional trip with probability $P_i - \lfloor P_i \rfloor$.
+
+**Destination choice.** Each trip's destination is drawn from zones weighted
+by total employment and a logistic distance-decay function of travel time:
+
+$$P(\text{dest} = j \mid \text{origin} = i) \propto E_j \cdot f(t_{ij})$$
+
+$$f(t) = \frac{1}{1 + \exp(\alpha + \beta \ln t)}$$
+
+where $t = t_{ij}$ is travel time in minutes and $E_j$ is total employment
+in zone $j$ across all sectors. Calibrate $\alpha$ and $\beta$ against
+observed service trip length distributions.
+
+**Vehicle assignment.** Vehicle type is drawn independently per trip from the
+shares in `service_vehicle_shares.csv`, which must sum to 1.0.
+
+**Canonical output — `service_trips.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `trip_id` | `int` | sequential identifier, 1-based |
+| `origin_zone_id` | `int` | zone where the service worker departs |
+| `destination_zone_id` | `int` | zone where the service worker arrives |
+| `vehicle_id` | `int` | vehicle type drawn from vehicle shares |
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `zone_employment.csv` | `zone_id` | `int` | zone identifier |
+| `zone_employment.csv` | `employment_sector` | `int` | sector code; must match codes in `service_trip_rates.csv` |
+| `zone_employment.csv` | `employment` | `float` | employees in this zone × sector cell |
+| `service_trip_rates.csv` | `employment_sector` | `int` | sector code |
+| `service_trip_rates.csv` | `trips_per_employee` | `float` | expected daily trips produced per employee in this sector |
+| `service_vehicle_shares.csv` | `vehicle_id` | `int` | must match `vehicle_id` in `vehicles.csv` |
+| `service_vehicle_shares.csv` | `share` | `float` | probability of this vehicle type; all shares must sum to 1.0 |
+
+Also requires `skim_time.mtx` in the same binary flat float32 format as the
+other modules. Values are in seconds.
+
+Sectors absent from `service_trip_rates.csv` contribute zero trip production;
+you do not need to list every sector.
+
+**Config — `[service_trips]` in `urban-dollop.toml`:**
+
+```toml
+[service_trips]
+distance_decay_alpha = -1.5
+distance_decay_beta = 2.0
+# seed = 42
+```
+
+The default α/β values are a starting point only — calibrate against
+observed service trip length distributions for the study area. `seed` is
+optional.
+
+**CLI:**
+
+```bash
+urban-dollop generate-service-trips data/
+urban-dollop generate-service-trips --outdir results/ data/
+```
+
+Reads `zone_employment.csv`, `service_trip_rates.csv`,
+`service_vehicle_shares.csv`, and `skim_time.mtx` from `data/`. Writes
+`service_trips.csv` to the current directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    ServiceTrip, ServiceTripConfig, ServiceTripRate, ServiceVehicleShare,
+    SkimMatrix, Zone, ZoneEmployment,
+    generate_service_trips,
+)
+
+zones = Zone.from_file("zones.csv")
+skim_time = SkimMatrix.from_file("skim_time.mtx", zones)
+
+trips = generate_service_trips(
+    zone_employment=ZoneEmployment.from_file("zone_employment.csv"),
+    trip_rates=ServiceTripRate.from_file("service_trip_rates.csv"),
+    vehicle_shares=ServiceVehicleShare.from_file("service_vehicle_shares.csv"),
+    skim_time=skim_time,
+    config=ServiceTripConfig(
+        distance_decay_alpha=-1.5,
+        distance_decay_beta=2.0,
+        seed=42,
+    ),
+)
+ServiceTrip.to_file(trips, "service_trips.csv")
 ```
 
 ---

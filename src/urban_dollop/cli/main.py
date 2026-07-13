@@ -7,6 +7,7 @@ from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
 from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
 from urban_dollop.cli.generate_freight_demand import run_generate_freight_demand
+from urban_dollop.cli.generate_service_trips import run_generate_service_trips
 from urban_dollop.cli.schedule_deliveries import run_schedule_deliveries
 from urban_dollop.cli.synthesize_firms import run_synthesize_firms
 
@@ -155,6 +156,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_freight_demand_cmd.set_defaults(
         handler=lambda args: run_generate_freight_demand(args.input_dir, args.outdir)
+    )
+
+    generate_service_trips_cmd = subparsers.add_parser(
+        "generate-service-trips",
+        help="Generate service vehicle trips from zone employment and trip rate parameters.",
+    )
+    generate_service_trips_cmd.add_argument(
+        "input_dir",
+        help=(
+            "Directory containing zones.gpkg (or .csv), zone_employment.csv, "
+            "service_trip_rates.csv, service_vehicle_shares.csv, and skim_time.mtx."
+        ),
+    )
+    generate_service_trips_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to service_trips.csv in the current working directory.",
+    )
+    generate_service_trips_cmd.set_defaults(
+        handler=lambda args: run_generate_service_trips(args.input_dir, args.outdir)
     )
 
     return parser
