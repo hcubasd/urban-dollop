@@ -712,9 +712,10 @@ employment weighted by the sector's consumption or production share. Let $e_f$
 be the employment of firm $f$, $s_f$ its sector, $u_s$ the use share of sector
 $s$, and $m_s$ its make share:
 
-$$\text{recv}[j] = \sum_{f \in j} e_f \cdot u_{s_f} \qquad \text{send}[i] = \sum_{f \in i} e_f \cdot m_{s_f}$$ A sender zone
-is further discounted by a distance-decay function so that distant suppliers
-are drawn less often (see **Distance-decay** below).
+$$\text{recv}[j] = \sum_{f \in j} e_f \cdot u_{s_f} \qquad \text{send}[i] = \sum_{f \in i} e_f \cdot m_{s_f}$$
+
+A sender zone is further discounted by a distance-decay function so that
+distant suppliers are drawn less often (see **Distance-decay** below).
 
 For each logistic segment the module runs a budget-fill loop. It draws a
 receiver zone $j$ with probability proportional to $\text{recv}[j]$, then a
