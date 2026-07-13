@@ -16,13 +16,13 @@ parameters so the same pipeline can be applied to any city.
 | Parcel demand generation | `parcel_dmnd` | implemented |
 | Parcel consolidation (UCCs + microhubs) | `parcel_dmnd` | implemented |
 | Parcel delivery scheduling | `parcel_schd` | implemented |
+| Firm synthesizer | `fs` | implemented |
+| Freight shipment demand | `ship` | planned |
+| Freight tour scheduling | `tour` | planned |
+| Service trip demand | `service` | planned |
 | Network / route assignment | `traf` | implemented |
 | Emission calculation (COPERT V + grade) | `traf` + grade extension | implemented |
 | KPI indicators | `outp` | planned |
-| Service trip demand | `service` | planned |
-| Freight shipment demand | `ship` | planned |
-| Freight tour scheduling | `tour` | planned |
-| Firm synthesizer | `fs` | planned |
 
 ---
 
@@ -44,14 +44,22 @@ flowchart LR
     B --> C
     B --> D
     C --> D
+    G[synthesize-firms] --> H[ship-demand]
+    H --> I[schedule-freight]
     D --> E[assign-network]
+    I --> E
+    J[service-trips] --> E
     E --> F[calculate-emissions]
 ```
 
-The consolidation steps are optional and composable — run either, both, or
-neither between demand generation and scheduling. All steps read inputs from a
-required directory argument and write output to the current directory by default.
-All steps are configured via `urban-dollop.toml` in the working directory.
+The parcel consolidation steps are optional and composable — run either, both,
+or neither between demand generation and scheduling. The freight pipeline
+(`synthesize-firms` → `ship-demand` → `schedule-freight`) and the service
+pipeline (`service-trips`) are independent of the parcel pipeline and converge
+at `assign-network`, which reads all `*_trips.csv` files present in the input
+directory. All steps read inputs from a required directory argument and write
+output to the current directory by default. All steps are configured via
+`urban-dollop.toml` in the working directory.
 
 ---
 
@@ -545,6 +553,133 @@ trips = schedule_parcel_deliveries(
         seed=42,
         departure_time_distribution=tod,
     ),
+)
+```
+
+---
+
+### synthesize-firms
+
+Generates a synthetic firm register for the study area. For each
+`(zone, sector)` employment cell in `zone_employment.csv`, the module draws
+firms sequentially from a size class distribution until the cell's employment
+is exhausted. Firms whose employment falls below `min_employment` are
+discarded after synthesis. Surviving firms are numbered from 1 and written to
+`firms.csv`.
+
+`firms.csv` is a shared prerequisite for the freight demand and service trip
+modules. It is not consumed by the parcel pipeline.
+
+**Firm size drawing.** For each firm, a size class $k$ is sampled from the
+cumulative distribution over classes ordered by `firm_size_class`:
+
+$$k^* = \min\left\{k : \sum_{i=1}^{k} p_i \geq u\right\}, \quad u \sim U[0,1]$$
+
+Employment within the selected class is then drawn uniformly:
+
+$$e \sim U[\ell_{k^*},\, u_{k^*}]$$
+
+The draw is capped at the remaining employment in the cell, so the last firm
+in each `(zone, sector)` cell may have lower employment than its class bounds.
+Firms with $e < e_\text{min}$ are dropped after all synthesis loops complete.
+
+**Firm placement.** When zones are loaded from a GeoPackage, each firm is
+placed at a uniformly random point within its zone polygon using rejection
+sampling (up to 500 attempts, falling back to the polygon centroid). When
+zones are loaded from a CSV with `x` and `y` columns, firms are placed at
+the zone centroid.
+
+**Canonical output — `firms.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `firm_id` | `int` | sequential identifier, 1-based after filtering |
+| `zone_id` | `int` | zone the firm is located in |
+| `employment_sector` | `int` | sector code matching `zone_employment.csv` |
+| `employment` | `float` | number of employees (drawn from size class bounds) |
+| `x_coord` | `float` | x coordinate in the CRS of `zones.gpkg` |
+| `y_coord` | `float` | y coordinate |
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `zones.gpkg` | `geometry` | polygon | zone polygon; used for within-zone coordinate sampling |
+| `zones.gpkg` | `zone_id` | `int` | unique zone identifier |
+| `zone_employment.csv` | `zone_id` | `int` | joins to zones |
+| `zone_employment.csv` | `employment_sector` | `int` | sector code; must match codes in `firm_size_distribution.csv` |
+| `zone_employment.csv` | `employment` | `float` | total employees in this zone × sector cell |
+| `firm_size_distribution.csv` | `employment_sector` | `int` | sector code |
+| `firm_size_distribution.csv` | `firm_size_class` | `int` | class identifier, ordered ascending by size |
+| `firm_size_distribution.csv` | `lower_bound` | `float` | minimum employees in this class |
+| `firm_size_distribution.csv` | `upper_bound` | `float` | maximum employees in this class; the largest class per sector is conventionally open-ended — set `upper_bound` to a practical maximum |
+| `firm_size_distribution.csv` | `probability` | `float` | share of firms falling in this class; must sum to 1.0 per sector |
+
+`zones.csv` is also accepted; include `x` and `y` columns to supply centroids
+explicitly. When centroids are used, firms are placed at the zone centroid
+rather than sampled within the polygon.
+
+**Config — `[firm_synthesis]` in `urban-dollop.toml`:**
+
+```toml
+[firm_synthesis]
+min_employment = 3
+# seed = 42
+```
+
+`min_employment` is required and study-area specific — set it to the smallest
+firm size that is meaningful for freight demand in your context. `seed` is
+optional; when set, all stochastic steps (size class draw, within-class draw,
+coordinate placement) are reproducible.
+
+**CLI:**
+
+```bash
+urban-dollop synthesize-firms data/
+urban-dollop synthesize-firms --outdir results/ data/
+```
+
+Reads `zones.gpkg` (or `.csv`), `zone_employment.csv`, and
+`firm_size_distribution.csv` from `data/`. Writes `firms.csv` to the current
+directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    Firm, FirmSizeClass, FirmSynthesisConfig, Zone, ZoneEmployment,
+    synthesize_firms,
+)
+
+zones = Zone.from_file("zones.gpkg")
+zone_employment = ZoneEmployment.from_file("zone_employment.csv")
+size_classes = FirmSizeClass.from_file("firm_size_distribution.csv")
+
+firms = synthesize_firms(
+    zones=zones,
+    zone_employment=zone_employment,
+    firm_size_classes=size_classes,
+    config=FirmSynthesisConfig(min_employment=3, seed=42),
+)
+Firm.to_file(firms, "firms.csv")
+```
+
+When zones are loaded from a GeoPackage the CLI handles polygon extraction
+automatically. To use polygon sampling via the Python API, pass
+`zone_polygons` explicitly:
+
+```python
+import geopandas as gpd
+
+gdf = gpd.read_file("zones.gpkg")
+zone_polygons = {int(row["zone_id"]): row["geometry"] for _, row in gdf.iterrows()}
+
+firms = synthesize_firms(
+    zones=zones,
+    zone_employment=zone_employment,
+    firm_size_classes=size_classes,
+    config=FirmSynthesisConfig(min_employment=3, seed=42),
+    zone_polygons=zone_polygons,
 )
 ```
 

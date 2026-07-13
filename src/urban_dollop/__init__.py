@@ -5,6 +5,8 @@ from urban_dollop.models import (
     DeliveryTrip,
     Depot,
     EmissionFactor,
+    Firm,
+    FirmSizeClass,
     LinearZone,
     LinkEmission,
     LoadedLink,
@@ -19,6 +21,7 @@ from urban_dollop.models import (
     Vehicle,
     ZeroEmissionZone,
     Zone,
+    ZoneEmployment,
     ZoneNode,
 )
 from urban_dollop.parcel_demand import (
@@ -34,6 +37,7 @@ from urban_dollop.parcel_scheduling import (
 from urban_dollop.consolidation import UCCConfig, consolidate_microhubs, consolidate_uccs
 from urban_dollop.emission import EmissionCalculationConfig, calculate_emissions
 from urban_dollop.network_assignment import NetworkAssignmentConfig, assign_network
+from urban_dollop.firm_synthesis import FirmSynthesisConfig, synthesize_firms
 
 __all__ = [
     "Zone",
@@ -68,4 +72,9 @@ __all__ = [
     "LinkEmission",
     "EmissionCalculationConfig",
     "calculate_emissions",
+    "Firm",
+    "FirmSizeClass",
+    "ZoneEmployment",
+    "FirmSynthesisConfig",
+    "synthesize_firms",
 ]

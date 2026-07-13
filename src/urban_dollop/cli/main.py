@@ -7,6 +7,7 @@ from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
 from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
 from urban_dollop.cli.schedule_deliveries import run_schedule_deliveries
+from urban_dollop.cli.synthesize_firms import run_synthesize_firms
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,6 +118,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     calculate_emissions_cmd.set_defaults(
         handler=lambda args: run_calculate_emissions(args.input_dir, args.outdir)
+    )
+
+    synthesize_firms_cmd = subparsers.add_parser(
+        "synthesize-firms",
+        help="Synthesise a firm register from zone employment and a size class distribution.",
+    )
+    synthesize_firms_cmd.add_argument(
+        "input_dir",
+        help="Directory containing zones.gpkg (or .csv), zone_employment.csv, and firm_size_distribution.csv.",
+    )
+    synthesize_firms_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to firms.csv in the current working directory.",
+    )
+    synthesize_firms_cmd.set_defaults(
+        handler=lambda args: run_synthesize_firms(args.input_dir, args.outdir)
     )
 
     return parser

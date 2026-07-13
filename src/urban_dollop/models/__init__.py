@@ -1,4 +1,7 @@
 from urban_dollop.models.carrier import Carrier
+from urban_dollop.models.firm import Firm
+from urban_dollop.models.firm_size_class import FirmSizeClass
+from urban_dollop.models.zone_employment import ZoneEmployment
 from urban_dollop.models.delivery_trip import DeliveryTrip
 from urban_dollop.models.depot import Depot
 from urban_dollop.models.emission_factor import EmissionFactor
@@ -38,4 +41,7 @@ __all__ = [
     "LoadedLink",
     "EmissionFactor",
     "LinkEmission",
+    "Firm",
+    "FirmSizeClass",
+    "ZoneEmployment",
 ]
