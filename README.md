@@ -573,15 +573,15 @@ modules. It is not consumed by the parcel pipeline.
 **Firm size drawing.** For each firm, a size class $k$ is sampled from the
 cumulative distribution over classes ordered by `firm_size_class`:
 
-$$k^* = \min\left\{k : \sum_{i=1}^{k} p_i \geq u\right\}, \quad u \sim U[0,1]$$
+$$k^\ast = \min\left\lbrace k : \sum_{i=1}^{k} p_i \geq u \right\rbrace, \quad u \sim U[0,1]$$
 
 Employment within the selected class is then drawn uniformly:
 
-$$e \sim U[\ell_{k^*},\, u_{k^*}]$$
+$$e \sim U[\ell_{k^\ast},\, u_{k^\ast}]$$
 
 The draw is capped at the remaining employment in the cell, so the last firm
 in each `(zone, sector)` cell may have lower employment than its class bounds.
-Firms with $e < e_\text{min}$ are dropped after all synthesis loops complete.
+Firms with $e < e_{\min}$ are dropped after all synthesis loops complete.
 
 **Firm placement.** When zones are loaded from a GeoPackage, each firm is
 placed at a uniformly random point within its zone polygon using rejection
