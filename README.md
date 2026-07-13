@@ -707,19 +707,30 @@ make/use coefficients — no zone-level OD matrix is required. Make/use
 coefficients encode which employment sectors are likely producers and which are
 likely consumers of each commodity group: a food-processing sector has a high
 make share for food goods; a retail sector has a high use share. Each zone's
-sending and receiving attractiveness is the sum of its firms' employment
-weighted by the appropriate share. A sender zone is further discounted by a
-distance-decay function so that distant suppliers are drawn less often.
+attractiveness as a receiver and as a sender is the sum over all its firms of
+employment weighted by the sector's consumption or production share:
+
+$$\text{recv}[j] = \sum_{\text{firms in } j} e_f \cdot \text{use\_share}_{s_f} \qquad \text{send}[i] = \sum_{\text{firms in } i} e_f \cdot \text{make\_share}_{s_f}$$
+
+where $e_f$ is the employment of firm $f$ and $s_f$ its sector. A sender zone
+is further discounted by a distance-decay function so that distant suppliers
+are drawn less often (see **Distance-decay** below).
 
 For each logistic segment the module runs a budget-fill loop. It draws a
-receiver zone, then a sender zone (with distance decay), then jointly draws a
-shipment size class and vehicle type via a multinomial logit model. The MNL
-captures the tradeoff between transport cost and inventory cost: a larger
-shipment reduces the number of vehicle runs needed but ties up more capital in
-stock, and a higher-capacity vehicle costs more per trip but moves more per
-run. The loop repeats, subtracting each shipment's weight from the daily
-budget, until the budget is exhausted; the final shipment is capped at the
-remaining weight. Output is `shipments.csv`, consumed by `schedule-freight`.
+receiver zone $j$ with probability proportional to $\text{recv}[j]$, then a
+sender zone $i$ with probability proportional to $\text{send}[i] \cdot f(c_{ij})$.
+It then jointly draws a shipment size class $s$ and vehicle type $v$ from a
+multinomial logit model with choice probabilities
+
+$$P(s, v) = \frac{\exp(U_{sv})}{\displaystyle\sum_{s',v'} \exp(U_{s'v'})}$$
+
+The utility $U_{sv}$ (defined in **Joint shipment-size × vehicle-type MNL**
+below) captures the tradeoff between transport cost and inventory cost: a
+larger shipment reduces the number of vehicle runs needed but ties up more
+capital in stock, and a higher-capacity vehicle costs more per trip but moves
+more per run. The loop repeats, subtracting each shipment's weight from the
+daily budget, until the budget is exhausted; the final shipment is capped at
+the remaining weight. Output is `shipments.csv`, consumed by `schedule-freight`.
 
 **Distance-decay.** Sender zones are drawn with probability proportional to
 their employment-weighted production share multiplied by a logistic decay
