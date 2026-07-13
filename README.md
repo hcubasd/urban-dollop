@@ -756,7 +756,7 @@ is
 $$U_{sv} = B_{TC} \cdot \left\lceil \frac{w_s}{\kappa_v} \right\rceil \cdot (c_h^v \cdot t_{ij} + c_d^v \cdot d_{ij}) + B_{IC} \cdot w_s + \text{ASC}_{v} + \text{ASC}_{s}$$
 
 where $w_s$ is the representative shipment weight (kg), $\kappa_v$ the vehicle
-capacity, and $c_h^v$/$c_d^v$ vehicle-specific cost rates from
+capacity, and $c_h^v$ and $c_d^v$ vehicle-specific cost rates from
 `freight_vehicle_params.csv`. The ceiling accounts for the number of trips
 required to move the shipment. Choice probabilities follow the standard
 softmax.
