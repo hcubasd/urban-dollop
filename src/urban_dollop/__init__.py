@@ -7,13 +7,19 @@ from urban_dollop.models import (
     EmissionFactor,
     Firm,
     FirmSizeClass,
+    FreightMNLParam,
+    FreightTotal,
+    FreightVehicleParams,
     LinearZone,
     LinkEmission,
     LoadedLink,
     LogitZone,
+    MakeUseCoefficient,
     Microhub,
     NetworkLink,
     ParcelDemand,
+    Shipment,
+    ShipmentSizeClass,
     SkimDistance,
     SkimMatrix,
     UCC,
@@ -38,6 +44,7 @@ from urban_dollop.consolidation import UCCConfig, consolidate_microhubs, consoli
 from urban_dollop.emission import EmissionCalculationConfig, calculate_emissions
 from urban_dollop.network_assignment import NetworkAssignmentConfig, assign_network
 from urban_dollop.firm_synthesis import FirmSynthesisConfig, synthesize_firms
+from urban_dollop.freight_demand import FreightDemandConfig, generate_freight_demand
 
 __all__ = [
     "Zone",
@@ -77,4 +84,12 @@ __all__ = [
     "ZoneEmployment",
     "FirmSynthesisConfig",
     "synthesize_firms",
+    "FreightTotal",
+    "MakeUseCoefficient",
+    "ShipmentSizeClass",
+    "FreightVehicleParams",
+    "FreightMNLParam",
+    "Shipment",
+    "FreightDemandConfig",
+    "generate_freight_demand",
 ]

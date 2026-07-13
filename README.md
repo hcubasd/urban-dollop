@@ -17,7 +17,7 @@ parameters so the same pipeline can be applied to any city.
 | Parcel consolidation (UCCs + microhubs) | `parcel_dmnd` | implemented |
 | Parcel delivery scheduling | `parcel_schd` | implemented |
 | Firm synthesizer | `fs` | implemented |
-| Freight shipment demand | `ship` | planned |
+| Freight shipment demand | `ship` | implemented |
 | Freight tour scheduling | `tour` | planned |
 | Service trip demand | `service` | planned |
 | Network / route assignment | `traf` | implemented |
@@ -681,6 +681,152 @@ firms = synthesize_firms(
     config=FirmSynthesisConfig(min_employment=3, seed=42),
     zone_polygons=zone_polygons,
 )
+```
+
+---
+
+### generate-freight-demand
+
+Synthesises discrete freight shipments from aggregate daily demand totals by
+logistic segment. For each logistic segment the module iterates a budget-fill
+loop: it draws a receiver zone weighted by firm employment and sector
+consumption shares, then draws a sender zone weighted by production shares and
+a distance-decay function, and jointly draws a shipment size class and vehicle
+type via a multinomial logit model. The budget for the segment is exhausted
+when accumulated shipment weight reaches the daily total; the final shipment is
+capped at the remaining weight. Output is `shipments.csv`, which the freight
+scheduling module reads to produce `freight_trips.csv`.
+
+The spatial disaggregation is driven entirely by the firm register and the
+make/use coefficients — no zone-level OD matrix is required. The commodity
+structure is compressed into logistic segments before synthesis, consistent
+with the MASS-GT SHIP module.
+
+**Distance-decay.** Sender zones are drawn with probability proportional to
+their employment-weighted production share multiplied by a logistic decay
+function of generalised sourcing cost:
+
+$$f(c_{ij}) = \frac{1}{1 + \exp(\alpha + \beta \ln c_{ij})}$$
+
+where $c_{ij} = c_h \cdot t_{ij} / 3600 + c_d \cdot d_{ij} / 1000$ is the
+generalised sourcing cost from origin zone $i$ to destination zone $j$, with
+$c_h$ (EUR/hour) and $c_d$ (EUR/km) from config. High cost → low decay →
+lower probability of being selected as sender.
+
+**Joint shipment-size × vehicle-type MNL.** For each alternative
+$(s, v)$ — a combination of size class $s$ and vehicle type $v$ — the utility
+is
+
+$$U_{sv} = B_{TC} \cdot \left\lceil \frac{w_s}{\kappa_v} \right\rceil \cdot (c_h^v \cdot t_{ij} + c_d^v \cdot d_{ij}) + B_{IC} \cdot w_s + \text{ASC}_{v} + \text{ASC}_{s}$$
+
+where $w_s$ is the representative shipment weight (kg), $\kappa_v$ the vehicle
+capacity, and $c_h^v$/$c_d^v$ vehicle-specific cost rates from
+`freight_vehicle_params.csv`. The ceiling accounts for the number of trips
+required to move the shipment. Choice probabilities follow the standard
+softmax.
+
+Note that the sourcing costs in the distance-decay function ($c_h$, $c_d$ from
+config) represent generic supply-chain access costs and are intentionally
+separate from the per-vehicle cost rates used in the MNL.
+
+**Canonical output — `shipments.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `shipment_id` | `int` | sequential identifier, 1-based |
+| `origin_zone_id` | `int` | sender's zone |
+| `destination_zone_id` | `int` | receiver's zone |
+| `logistic_segment` | `int` | logistic segment code |
+| `vehicle_id` | `int` | vehicle type chosen in the MNL |
+| `weight_kg` | `float` | shipment weight in kg; may be smaller than the nominal class weight for the final budget-exhausting shipment |
+| `weight_class` | `int` | size class chosen in the MNL |
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `firms.csv` | `firm_id` | `int` | unique firm identifier (output of `synthesize-firms`) |
+| `firms.csv` | `zone_id` | `int` | zone the firm is located in |
+| `firms.csv` | `employment_sector` | `int` | sector code; must match codes in `make_use_coefficients.csv` |
+| `firms.csv` | `employment` | `float` | number of employees |
+| `freight_demand.csv` | `logistic_segment` | `int` | logistic segment code |
+| `freight_demand.csv` | `tonnes_day` | `float` | total daily freight demand in tonnes for this segment |
+| `make_use_coefficients.csv` | `logistic_segment` | `int` | logistic segment |
+| `make_use_coefficients.csv` | `employment_sector` | `int` | sector code |
+| `make_use_coefficients.csv` | `make_share` | `float` | proportional production weight for this sector; normalised internally |
+| `make_use_coefficients.csv` | `use_share` | `float` | proportional consumption weight; normalised internally |
+| `shipment_size_classes.csv` | `logistic_segment` | `int` | |
+| `shipment_size_classes.csv` | `size_class` | `int` | identifier; maps to `ASC_SS_{size_class}` in `freight_mnl_params.csv` |
+| `shipment_size_classes.csv` | `weight_kg` | `float` | representative weight assigned to shipments drawn in this class |
+| `freight_vehicle_params.csv` | `vehicle_id` | `int` | must match `vehicle_id` in `vehicles.csv` |
+| `freight_vehicle_params.csv` | `capacity_kg` | `float` | maximum payload in kg |
+| `freight_vehicle_params.csv` | `cost_per_hour` | `float` | vehicle-specific EUR/hour used in MNL transport cost |
+| `freight_vehicle_params.csv` | `cost_per_km` | `float` | vehicle-specific EUR/km |
+| `freight_mnl_params.csv` | `logistic_segment` | `int \| *` | segment this row applies to; `*` means global default, overridden by segment-specific rows |
+| `freight_mnl_params.csv` | `parameter` | `str` | one of `B_TransportCosts`, `B_InventoryCosts`, `ASC_VT_{vehicle_id}`, `ASC_SS_{size_class}` |
+| `freight_mnl_params.csv` | `value` | `float` | coefficient value |
+
+Also requires `skim_time.mtx` and `skim_distance.mtx` — the same binary flat
+float32 files used by the parcel pipeline. `skim_time` values are in seconds;
+`skim_distance` values in metres.
+
+**Config — `[freight_demand]` in `urban-dollop.toml`:**
+
+```toml
+[freight_demand]
+sourcing_cost_per_hour = 35.0
+sourcing_cost_per_km = 0.50
+distance_decay_alpha = -6.172
+distance_decay_beta = 2.180
+# seed = 42
+```
+
+All five parameters have defaults matching MASS-GT calibration values for the
+Netherlands; replace with study-area estimates. `seed` is optional; omit for a
+random draw each run.
+
+**CLI:**
+
+```bash
+urban-dollop generate-freight-demand data/
+urban-dollop generate-freight-demand --outdir results/ data/
+```
+
+Reads all input files from `data/` and writes `shipments.csv` to the current
+directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    Firm, FreightDemandConfig, FreightMNLParam, FreightTotal,
+    FreightVehicleParams, MakeUseCoefficient, Shipment, ShipmentSizeClass,
+    SkimDistance, SkimMatrix, Zone,
+    generate_freight_demand,
+)
+
+zones = Zone.from_file("zones.csv")
+skim_time = SkimMatrix.from_file("skim_time.mtx", zones)
+skim_distance = SkimDistance.from_file("skim_distance.mtx", zones)
+
+shipments = generate_freight_demand(
+    firms=Firm.from_file("firms.csv"),
+    freight_totals=FreightTotal.from_file("freight_demand.csv"),
+    make_use=MakeUseCoefficient.from_file("make_use_coefficients.csv"),
+    size_classes=ShipmentSizeClass.from_file("shipment_size_classes.csv"),
+    vehicle_params=FreightVehicleParams.from_file("freight_vehicle_params.csv"),
+    mnl_params=FreightMNLParam.from_file("freight_mnl_params.csv"),
+    skim_time=skim_time,
+    skim_distance=skim_distance,
+    config=FreightDemandConfig(
+        sourcing_cost_per_hour=35.0,
+        sourcing_cost_per_km=0.50,
+        distance_decay_alpha=-6.172,
+        distance_decay_beta=2.180,
+        seed=42,
+    ),
+)
+Shipment.to_file(shipments, "shipments.csv")
 ```
 
 ---

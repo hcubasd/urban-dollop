@@ -1,6 +1,12 @@
 from urban_dollop.models.carrier import Carrier
 from urban_dollop.models.firm import Firm
 from urban_dollop.models.firm_size_class import FirmSizeClass
+from urban_dollop.models.freight_mnl_param import FreightMNLParam
+from urban_dollop.models.freight_total import FreightTotal
+from urban_dollop.models.freight_vehicle_params import FreightVehicleParams
+from urban_dollop.models.make_use_coefficient import MakeUseCoefficient
+from urban_dollop.models.shipment import Shipment
+from urban_dollop.models.shipment_size_class import ShipmentSizeClass
 from urban_dollop.models.zone_employment import ZoneEmployment
 from urban_dollop.models.delivery_trip import DeliveryTrip
 from urban_dollop.models.depot import Depot
@@ -44,4 +50,10 @@ __all__ = [
     "Firm",
     "FirmSizeClass",
     "ZoneEmployment",
+    "FreightTotal",
+    "MakeUseCoefficient",
+    "ShipmentSizeClass",
+    "FreightVehicleParams",
+    "FreightMNLParam",
+    "Shipment",
 ]

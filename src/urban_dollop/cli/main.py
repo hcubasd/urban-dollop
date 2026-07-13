@@ -6,6 +6,7 @@ from urban_dollop.cli.calculate_emissions import run_calculate_emissions
 from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
 from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
+from urban_dollop.cli.generate_freight_demand import run_generate_freight_demand
 from urban_dollop.cli.schedule_deliveries import run_schedule_deliveries
 from urban_dollop.cli.synthesize_firms import run_synthesize_firms
 
@@ -134,6 +135,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     synthesize_firms_cmd.set_defaults(
         handler=lambda args: run_synthesize_firms(args.input_dir, args.outdir)
+    )
+
+    generate_freight_demand_cmd = subparsers.add_parser(
+        "generate-freight-demand",
+        help="Synthesise discrete freight shipments from aggregate logistic-segment demand totals.",
+    )
+    generate_freight_demand_cmd.add_argument(
+        "input_dir",
+        help=(
+            "Directory containing zones.gpkg (or .csv), firms.csv, freight_demand.csv, "
+            "make_use_coefficients.csv, shipment_size_classes.csv, freight_vehicle_params.csv, "
+            "freight_mnl_params.csv, skim_time.mtx, and skim_distance.mtx."
+        ),
+    )
+    generate_freight_demand_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to shipments.csv in the current working directory.",
+    )
+    generate_freight_demand_cmd.set_defaults(
+        handler=lambda args: run_generate_freight_demand(args.input_dir, args.outdir)
     )
 
     return parser
