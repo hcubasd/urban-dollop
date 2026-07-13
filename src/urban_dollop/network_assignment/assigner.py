@@ -52,14 +52,23 @@ def assign_network(
     node_index = {n: i for i, n in enumerate(node_ids)}
     n_nodes = len(node_ids)
 
-    rows = [node_index[l.from_node_id] for l in links]
-    cols = [node_index[l.to_node_id] for l in links]
-    data = [l.distance_m for l in links]
+    # Keep only the shortest link for each (from, to) node pair.
+    # csr_matrix sums duplicate (row, col) entries; we need minimum distance.
+    link_by_edge: dict[tuple[int, int], NetworkLink] = {}
+    for l in links:
+        key = (l.from_node_id, l.to_node_id)
+        if key not in link_by_edge or l.distance_m < link_by_edge[key].distance_m:
+            link_by_edge[key] = l
+
+    deduped = list(link_by_edge.values())
+    rows = [node_index[l.from_node_id] for l in deduped]
+    cols = [node_index[l.to_node_id] for l in deduped]
+    data = [l.distance_m for l in deduped]
     graph = csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes))
 
     link_lookup: dict[tuple[int, int], NetworkLink] = {
         (node_index[l.from_node_id], node_index[l.to_node_id]): l
-        for l in links
+        for l in deduped
     }
 
     origin_node_indices = sorted({

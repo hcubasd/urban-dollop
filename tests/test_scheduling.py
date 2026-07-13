@@ -4,6 +4,7 @@ import pytest
 
 from urban_dollop import generate_parcel_demand, schedule_parcel_deliveries
 from urban_dollop.models.parcel_demand import ParcelDemand
+from urban_dollop.models.vehicle import Vehicle
 from urban_dollop.parcel_scheduling.config import ParcelSchedulingConfig
 
 
@@ -150,6 +151,13 @@ def test_departure_distribution_seed_is_reproducible(
 def test_departure_distribution_validation_wrong_length():
     with pytest.raises(Exception, match="24"):
         ParcelSchedulingConfig(departure_time_distribution=[0.5, 1.0])
+
+
+def test_demand_exceeding_max_vehicle_capacity_raises(zones, skim_distance):
+    vehicles_small = [Vehicle(vehicle_id=1, name="van", max_parcels=10)]
+    demands = [ParcelDemand(origin_zone_id=1, destination_zone_id=2, carrier="alpha", n_parcels=50)]
+    with pytest.raises(ValueError, match="exceeds"):
+        schedule_parcel_deliveries(demands, vehicles_small, skim_distance, zones)
 
 
 def test_departure_distribution_validation_not_cumulative():

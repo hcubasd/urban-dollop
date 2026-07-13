@@ -120,6 +120,20 @@ def test_departure_hour_disaggregates_by_hour(network_links, zone_nodes, vehicle
     assert all(r.n_trips == 1 for r in link1_rows)
 
 
+def test_parallel_links_uses_shorter(zone_nodes, vehicles):
+    # Two directed links between the same node pair; the shorter should win.
+    # Summing their distances (the pre-fix bug) would give 5+100=105 m.
+    parallel_links = [
+        NetworkLink(link_id=10, from_node_id=1, to_node_id=2, distance_m=5.0, road_type="urban"),
+        NetworkLink(link_id=11, from_node_id=1, to_node_id=2, distance_m=100.0, road_type="urban"),
+    ]
+    trips = [make_trip(1, 2)]
+    result = assign_network(trips, parallel_links, zone_nodes[:2], vehicles)
+    assert len(result) == 1
+    assert result[0].link_id == 10
+    assert result[0].n_trips == 1
+
+
 def test_same_hour_trips_accumulate(network_links, zone_nodes, vehicles):
     trips = [
         DeliveryTrip(

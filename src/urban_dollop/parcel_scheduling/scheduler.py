@@ -177,6 +177,13 @@ def _cluster_demands_spatially(
     to_cluster: list[ParcelDemand] = []
 
     for d in demands:
+        if d.n_parcels > max_capacity:
+            raise ValueError(
+                f"Demand record ({d.origin_zone_id} → {d.destination_zone_id}, "
+                f"carrier={d.carrier!r}) has n_parcels={d.n_parcels} which exceeds "
+                f"the largest vehicle capacity ({max_capacity}). "
+                "Split the demand or add a larger vehicle."
+            )
         if d.n_parcels >= max_capacity:
             tours.append([d])
         else:

@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from urban_dollop.emission import EmissionCalculationConfig, calculate_emissions
 from urban_dollop.models.emission_factor import EmissionFactor
@@ -297,6 +298,11 @@ def test_incomplete_factor_grid_raises():
     link = LoadedLink(link_id=1, vehicle_id=1, n_trips=1)
     with pytest.raises(ValueError, match="Incomplete emission factor grid"):
         calculate_emissions([link], factors, [nl()], cfg())
+
+
+def test_zero_speed_raises():
+    with pytest.raises(ValidationError):
+        EmissionCalculationConfig(speed_kmh={"urban": 0.0}, fill_rate=0.5)
 
 
 def test_config_required_raises(emission_factors, loaded_links_simple, network_links_simple):

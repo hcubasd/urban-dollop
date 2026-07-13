@@ -96,6 +96,12 @@ def _copert_v_ef(ef: EmissionFactor, speed_kmh: float) -> float:
     v = speed_kmh
     numerator = ef.alpha * v**2 + ef.beta * v + ef.gamma + ef.delta / v
     denominator = ef.epsilon * v**2 + ef.zeta * v + ef.eta
+    if denominator == 0.0:
+        raise ValueError(
+            f"COPERT V denominator is zero for vehicle {ef.vehicle_id}, "
+            f"pollutant '{ef.pollutant}' at gradient {ef.gradient_pct}%, "
+            f"load {ef.load_pct}%. Ensure η (eta) is non-zero."
+        )
     return (numerator / denominator) * (1.0 - ef.rf)
 
 
