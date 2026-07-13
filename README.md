@@ -18,7 +18,7 @@ parameters so the same pipeline can be applied to any city.
 | Parcel delivery scheduling | `parcel_schd` | implemented |
 | Firm synthesizer | `fs` | implemented |
 | Freight shipment demand | `ship` | implemented |
-| Freight tour scheduling | `tour` | planned |
+| Freight tour scheduling | `tour` | implemented |
 | Service trip demand | `service` | implemented |
 | Network / route assignment | `traf` | implemented |
 | Emission calculation (COPERT V + grade) | `traf` + grade extension | implemented |
@@ -833,6 +833,76 @@ shipments = generate_freight_demand(
     ),
 )
 Shipment.to_file(shipments, "shipments.csv")
+```
+
+---
+
+### schedule-freight
+
+Consolidates discrete freight shipments into vehicle trips by load. Shipments
+are grouped by `(origin_zone_id, destination_zone_id, vehicle_id)` — the
+vehicle type was already chosen by the MNL in `generate-freight-demand` and is
+not revisited here. For each group the total shipment weight is divided by the
+vehicle's capacity and rounded up:
+
+$$n_\text{trips} = \left\lceil \frac{\sum w_s}{\kappa_v} \right\rceil$$
+
+where $\sum w_s$ is the total weight of shipments in the group (kg) and
+$\kappa_v$ is the capacity of vehicle type $v$ from
+`freight_vehicle_params.csv`. Each of the $n_\text{trips}$ dispatches becomes
+one row in `freight_trips.csv`, which `assign-network` then routes onto the
+road network.
+
+**Canonical output — `freight_trips.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `trip_id` | `int` | sequential identifier, 1-based |
+| `origin_zone_id` | `int` | zone where the vehicle departs |
+| `destination_zone_id` | `int` | zone where the vehicle delivers |
+| `vehicle_id` | `int` | vehicle type |
+
+**Canonical inputs:**
+
+| file | field | type | description |
+|---|---|---|---|
+| `shipments.csv` | all fields | | output of `generate-freight-demand`; see its output table |
+| `freight_vehicle_params.csv` | `vehicle_id` | `int` | must match vehicle_id values in `shipments.csv` |
+| `freight_vehicle_params.csv` | `capacity_kg` | `float` | maximum payload used in the consolidation formula |
+
+The other columns of `freight_vehicle_params.csv` (`cost_per_hour`,
+`cost_per_km`) are not used here; the same file is shared with
+`generate-freight-demand`.
+
+This step has no required config parameters. An optional `[freight_scheduling]`
+section in `urban-dollop.toml` is accepted but currently unused.
+
+**CLI:**
+
+```bash
+urban-dollop schedule-freight data/
+urban-dollop schedule-freight --outdir results/ data/
+```
+
+Reads `shipments.csv` and `freight_vehicle_params.csv` from `data/`. Writes
+`freight_trips.csv` to the current directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    FreightSchedulingConfig, FreightTrip, FreightVehicleParams, Shipment,
+    schedule_freight,
+)
+
+shipments = Shipment.from_file("shipments.csv")
+vehicle_params = FreightVehicleParams.from_file("freight_vehicle_params.csv")
+
+trips = schedule_freight(
+    shipments=shipments,
+    vehicle_params=vehicle_params,
+)
+FreightTrip.to_file(trips, "freight_trips.csv")
 ```
 
 ---

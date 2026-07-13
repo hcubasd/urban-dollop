@@ -9,6 +9,7 @@ from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
 from urban_dollop.cli.generate_freight_demand import run_generate_freight_demand
 from urban_dollop.cli.generate_service_trips import run_generate_service_trips
 from urban_dollop.cli.schedule_deliveries import run_schedule_deliveries
+from urban_dollop.cli.schedule_freight import run_schedule_freight
 from urban_dollop.cli.synthesize_firms import run_synthesize_firms
 
 
@@ -156,6 +157,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_freight_demand_cmd.set_defaults(
         handler=lambda args: run_generate_freight_demand(args.input_dir, args.outdir)
+    )
+
+    schedule_freight_cmd = subparsers.add_parser(
+        "schedule-freight",
+        help="Consolidate freight shipments into vehicle trips by load.",
+    )
+    schedule_freight_cmd.add_argument(
+        "input_dir",
+        help="Directory containing shipments.csv and freight_vehicle_params.csv.",
+    )
+    schedule_freight_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to freight_trips.csv in the current working directory.",
+    )
+    schedule_freight_cmd.set_defaults(
+        handler=lambda args: run_schedule_freight(args.input_dir, args.outdir)
     )
 
     generate_service_trips_cmd = subparsers.add_parser(
