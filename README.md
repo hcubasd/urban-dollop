@@ -743,11 +743,9 @@ $$f(c_{ij}) = \frac{1}{1 + \exp(\alpha + \beta \ln c_{ij})}$$
 
 where $c_{ij} = c_h \cdot t_{ij} / 3600 + c_d \cdot d_{ij} / 1000$ is the
 generalised sourcing cost from origin zone $i$ to destination zone $j$, with
-$c_h$ (cost per hour) and $c_d$ (cost per km) from config. $\alpha$ and
-$\beta$ are `distance_decay_alpha` and `distance_decay_beta` in config,
-with defaults calibrated on the Netherlands from MASS-GT; replace with
-study-area estimates. High cost → low decay → lower probability of being
-selected as sender.
+$c_h$ (cost per hour) and $c_d$ (cost per km) from config. $\alpha$ and $\beta$ are `distance_decay_alpha` and `distance_decay_beta`
+in config. High cost → low decay → lower probability of being selected as
+sender.
 
 **Joint shipment-size × vehicle-type MNL.** For each alternative
 $(s, v)$ — a combination of size class $s$ and vehicle type $v$ — the utility
