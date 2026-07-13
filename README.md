@@ -44,22 +44,22 @@ flowchart LR
     B --> C
     B --> D
     C --> D
-    G[synthesize-firms] --> H[ship-demand]
+    G[synthesize-firms] --> H[generate-freight-demand]
     H --> I[schedule-freight]
     D --> E[assign-network]
     I --> E
-    J[service-trips] --> E
+    J[generate-service-trips] --> E
     E --> F[calculate-emissions]
 ```
 
 The parcel consolidation steps are optional and composable — run either, both,
 or neither between demand generation and scheduling. The freight pipeline
-(`synthesize-firms` → `ship-demand` → `schedule-freight`) and the service
-pipeline (`service-trips`) are independent of the parcel pipeline and converge
-at `assign-network`, which reads all `*_trips.csv` files present in the input
-directory. All steps read inputs from a required directory argument and write
-output to the current directory by default. All steps are configured via
-`urban-dollop.toml` in the working directory.
+(`synthesize-firms` → `generate-freight-demand` → `schedule-freight`) and the
+service pipeline (`generate-service-trips`) are independent of the parcel
+pipeline and converge at `assign-network`, which reads all `*_trips.csv` files
+present in the input directory. All steps read inputs from a required directory
+argument and write output to the current directory by default. All steps are
+configured via `urban-dollop.toml` in the working directory.
 
 ---
 
@@ -178,7 +178,7 @@ defines the ordered categories of monthly parcel volume a resident can belong to
 the linear predictor is $\eta = \beta_u$, and the probability that a resident
 orders at most $L_k$ parcels per month is:
 
-$$P(X \leq L_k) = \frac{1}{1 + e^{\eta - \mu_k}}$$
+$$P(X \leq L_k) = \frac{1}{1 + \exp(\eta - \mu_k)}$$
 
 The `mu_thresholds` $(\mu_k)$ are the cut-points separating adjacent levels on
 the latent scale — one per level except the last. Cell probabilities follow as
@@ -570,18 +570,24 @@ discarded after synthesis. Surviving firms are numbered from 1 and written to
 `firms.csv` is consumed by `generate-freight-demand`. It is not consumed by
 the parcel or service trip pipelines.
 
-**Firm size drawing.** For each firm, a size class $k$ is sampled from the
-cumulative distribution over classes ordered by `firm_size_class`:
+**Firm size drawing.** For each firm, a size class is selected by inverse CDF.
+Let $p_k$ be the share of firms in class $k$ (the `probability` column of
+`firm_size_distribution.csv`), and let $F_k = \sum_{i=1}^{k} p_i$ be the
+cumulative share up to and including class $k$. Given a uniform draw
+$u \sim U[0, 1]$, the selected class is:
 
-$$k^\ast = \min\left\lbrace k : \sum_{i=1}^{k} p_i \geq u \right\rbrace, \quad u \sim U[0,1]$$
+$$k^\ast = \min\left\lbrace k : F_k \geq u \right\rbrace$$
 
-Employment within the selected class is then drawn uniformly:
+Employment $e$ for the firm is then drawn uniformly within the bounds
+$[a, b]$ of the selected class, where $a$ and $b$ are the `lower_bound` and
+`upper_bound` columns of `firm_size_distribution.csv`:
 
-$$e \sim U[\ell_{k^\ast},\, u_{k^\ast}]$$
+$$e \sim U[a_{k^\ast},\, b_{k^\ast}]$$
 
 The draw is capped at the remaining employment in the cell, so the last firm
 in each `(zone, sector)` cell may have lower employment than its class bounds.
-Firms with $e < e_{\min}$ are dropped after all synthesis loops complete.
+Firms with $e < e_{\min}$, where $e_{\min}$ is `min_employment` from config,
+are dropped after all synthesis loops complete.
 
 **Firm placement.** When zones are loaded from a GeoPackage, each firm is
 placed at a uniformly random point within its zone polygon using rejection
@@ -698,9 +704,7 @@ capped at the remaining weight. Output is `shipments.csv`, which the freight
 scheduling module reads to produce `freight_trips.csv`.
 
 The spatial disaggregation is driven entirely by the firm register and the
-make/use coefficients — no zone-level OD matrix is required. The commodity
-structure is compressed into logistic segments before synthesis, consistent
-with the MASS-GT SHIP module.
+make/use coefficients — no zone-level OD matrix is required.
 
 **Distance-decay.** Sender zones are drawn with probability proportional to
 their employment-weighted production share multiplied by a logistic decay
@@ -755,7 +759,7 @@ separate from the per-vehicle cost rates used in the MNL.
 | `make_use_coefficients.csv` | `employment_sector` | `int` | sector code |
 | `make_use_coefficients.csv` | `make_share` | `float` | proportional production weight for this sector; normalised internally |
 | `make_use_coefficients.csv` | `use_share` | `float` | proportional consumption weight; normalised internally |
-| `shipment_size_classes.csv` | `logistic_segment` | `int` | |
+| `shipment_size_classes.csv` | `logistic_segment` | `int` | logistic segment this size class belongs to |
 | `shipment_size_classes.csv` | `size_class` | `int` | identifier; maps to `ASC_SS_{size_class}` in `freight_mnl_params.csv` |
 | `shipment_size_classes.csv` | `weight_kg` | `float` | representative weight assigned to shipments drawn in this class |
 | `freight_vehicle_params.csv` | `vehicle_id` | `int` | must match `vehicle_id` in `vehicles.csv` |
@@ -988,7 +992,7 @@ not used for routing but must be present; the same file is a required input to
 # seed = 42
 ```
 
-No required parameters. `seed` is reserved for future multi-routing support.
+No required parameters.
 
 **CLI:**
 
@@ -1043,7 +1047,7 @@ Per-link grade-sensitive interpolation — rather than a single EF per road type
 | `vehicle_id` | `int` | vehicle type |
 | `hour` | `int \| null` | departure hour (0–23); `null` when not disaggregated |
 | `pollutant` | `str` | pollutant name (e.g. `CO2`, `NOx`, `PM10`) |
-| `emission_g` | `float` | total grams emitted: $n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$ |
+| `emission_g` | `float` | total grams of this pollutant emitted on this link by this vehicle type and hour |
 
 **Canonical inputs:**
 
@@ -1074,7 +1078,11 @@ $V$ (km/h):
 $$\mathrm{EF}(V) = \frac{\alpha V^2 + \beta V + \gamma + \delta/V}{\varepsilon V^2 + \zeta V + \eta} \cdot (1 - \mathrm{RF})$$
 
 The seven coefficients $\alpha, \beta, \gamma, \delta, \varepsilon, \zeta, \eta$
-and the deterioration factor RF are vehicle- and pollutant-specific.
+and the deterioration factor RF are vehicle- and pollutant-specific. Total
+emissions per link are then $\mathrm{emission\_g} = n \cdot (d / 1000) \cdot
+\mathrm{EF}(V)$, where $n$ is the trip count from `loaded_links.csv`, $d$ is
+link length in metres from `network_links`, and $V$ is the speed assigned to
+the link's `road_type` in config.
 
 **How grade enters.** For each link, the module looks up `grade_pct`,
 `distance_m`, and `road_type` from `network_links` by joining on `link_id`.
