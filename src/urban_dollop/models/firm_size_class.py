@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from urban_dollop.helpers.read_csv import read_csv
 
@@ -22,6 +22,19 @@ class FirmSizeClass(BaseModel):
     lower_bound: float
     upper_bound: float
     probability: float
+
+    @model_validator(mode="after")
+    def check_bounds(self) -> "FirmSizeClass":
+        if self.lower_bound <= 0:
+            raise ValueError(
+                f"lower_bound must be positive (got {self.lower_bound}); "
+                "a firm with zero or fewer employees is not meaningful."
+            )
+        if self.upper_bound < self.lower_bound:
+            raise ValueError(
+                f"upper_bound ({self.upper_bound}) must be >= lower_bound ({self.lower_bound})."
+            )
+        return self
 
     @classmethod
     def from_file(cls, path: str | Path, columns: dict[str, str] = {}) -> list[Self]:
