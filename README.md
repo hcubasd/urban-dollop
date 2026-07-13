@@ -695,18 +695,31 @@ firms = synthesize_firms(
 
 ### generate-freight-demand
 
-Synthesises discrete freight shipments from aggregate daily demand totals by
-logistic segment. For each logistic segment the module iterates a budget-fill
-loop: it draws a receiver zone weighted by firm employment and sector
-consumption shares, then draws a sender zone weighted by production shares and
-a distance-decay function, and jointly draws a shipment size class and vehicle
-type via a multinomial logit model. The budget for the segment is exhausted
-when accumulated shipment weight reaches the daily total; the final shipment is
-capped at the remaining weight. Output is `shipments.csv`, which the freight
-scheduling module reads to produce `freight_trips.csv`.
+Synthesises discrete freight shipments from aggregate daily demand totals. A
+logistic segment is a commodity group — food, chemicals, building materials,
+and so on — that pools goods with similar handling and transport characteristics.
+`freight_demand.csv` gives the total tonnes per day for each segment; this
+module disaggregates that total into individual shipments with explicit sender
+and receiver zones, weights, and vehicle types.
 
 The spatial disaggregation is driven entirely by the firm register and the
-make/use coefficients — no zone-level OD matrix is required.
+make/use coefficients — no zone-level OD matrix is required. Make/use
+coefficients encode which employment sectors are likely producers and which are
+likely consumers of each commodity group: a food-processing sector has a high
+make share for food goods; a retail sector has a high use share. Each zone's
+sending and receiving attractiveness is the sum of its firms' employment
+weighted by the appropriate share. A sender zone is further discounted by a
+distance-decay function so that distant suppliers are drawn less often.
+
+For each logistic segment the module runs a budget-fill loop. It draws a
+receiver zone, then a sender zone (with distance decay), then jointly draws a
+shipment size class and vehicle type via a multinomial logit model. The MNL
+captures the tradeoff between transport cost and inventory cost: a larger
+shipment reduces the number of vehicle runs needed but ties up more capital in
+stock, and a higher-capacity vehicle costs more per trip but moves more per
+run. The loop repeats, subtracting each shipment's weight from the daily
+budget, until the budget is exhausted; the final shipment is capped at the
+remaining weight. Output is `shipments.csv`, consumed by `schedule-freight`.
 
 **Distance-decay.** Sender zones are drawn with probability proportional to
 their employment-weighted production share multiplied by a logistic decay
