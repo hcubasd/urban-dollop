@@ -21,7 +21,7 @@ parameters so the same pipeline can be applied to any city.
 | Freight tour scheduling | `tour` | implemented |
 | Service trip demand | `service` | implemented |
 | Network / route assignment | `traf` | implemented |
-| Emission calculation (COPERT V + grade) | `traf` + grade extension | implemented |
+| Emission calculation (speed-polynomial + grade) | `traf` + grade extension | implemented |
 | KPI indicators | `outp` | planned |
 
 ---
@@ -716,7 +716,7 @@ $$f(c_{ij}) = \frac{1}{1 + \exp(\alpha + \beta \ln c_{ij})}$$
 
 where $c_{ij} = c_h \cdot t_{ij} / 3600 + c_d \cdot d_{ij} / 1000$ is the
 generalised sourcing cost from origin zone $i$ to destination zone $j$, with
-$c_h$ (EUR/hour) and $c_d$ (EUR/km) from config. High cost → low decay →
+$c_h$ (cost per hour) and $c_d$ (cost per km) from config. High cost → low decay →
 lower probability of being selected as sender.
 
 **Joint shipment-size × vehicle-type MNL.** For each alternative
@@ -766,8 +766,8 @@ separate from the per-vehicle cost rates used in the MNL.
 | `shipment_size_classes.csv` | `weight_kg` | `float` | representative weight assigned to shipments drawn in this class |
 | `freight_vehicle_params.csv` | `vehicle_id` | `int` | must match `vehicle_id` in `vehicles.csv` |
 | `freight_vehicle_params.csv` | `capacity_kg` | `float` | maximum payload in kg |
-| `freight_vehicle_params.csv` | `cost_per_hour` | `float` | vehicle-specific EUR/hour used in MNL transport cost |
-| `freight_vehicle_params.csv` | `cost_per_km` | `float` | vehicle-specific EUR/km |
+| `freight_vehicle_params.csv` | `cost_per_hour` | `float` | vehicle-specific monetary cost per hour used in MNL transport cost |
+| `freight_vehicle_params.csv` | `cost_per_km` | `float` | vehicle-specific monetary cost per km |
 | `freight_mnl_params.csv` | `logistic_segment` | `int \| *` | segment this row applies to; `*` means global default, overridden by segment-specific rows |
 | `freight_mnl_params.csv` | `parameter` | `str` | one of `B_TransportCosts`, `B_InventoryCosts`, `ASC_VT_{vehicle_id}`, `ASC_SS_{size_class}` |
 | `freight_mnl_params.csv` | `value` | `float` | coefficient value |
@@ -1104,12 +1104,16 @@ LoadedLink.to_file(result, "loaded_links.csv")
 
 ### calculate-emissions
 
-Calculates pollutant emissions for each loaded network link using COPERT V
-emission factors. For each (link, vehicle, pollutant) combination, it reads
-road attributes from `network_links`, applies bilinear interpolation over road
-gradient and vehicle load, and multiplies by trip count and link length.
-Per-link grade-sensitive interpolation — rather than a single EF per road type
-— is the core improvement over the original MASS-GT code.
+Calculates pollutant emissions for each loaded network link using
+speed-polynomial emission factors. For each (link, vehicle, pollutant)
+combination, it reads road attributes from `network_links`, applies bilinear
+interpolation over road gradient and vehicle load, and multiplies by trip count
+and link length. Per-link grade-sensitive interpolation — rather than a single
+EF per road type — is the core improvement over the original MASS-GT code.
+
+The polynomial form is shared by COPERT V, HBEFA, and compatible regional
+models; the coefficients in `emission_factors.csv` determine which model's
+calibration is applied.
 
 **Canonical output — `link_emissions.csv`:**
 
@@ -1135,16 +1139,16 @@ is also accepted.
 | `emission_factors.csv` | `pollutant` | `str` | pollutant name |
 | `emission_factors.csv` | `gradient_pct` | `float` | road gradient bin (e.g. −6, −4, −2, 0, 2, 4, 6) |
 | `emission_factors.csv` | `load_pct` | `float` | vehicle load bin (0, 50, or 100) |
-| `emission_factors.csv` | `alpha` | `float` | COPERT V polynomial coefficient |
-| `emission_factors.csv` | `beta` | `float` | COPERT V polynomial coefficient |
-| `emission_factors.csv` | `gamma` | `float` | COPERT V polynomial coefficient |
-| `emission_factors.csv` | `delta` | `float` | COPERT V polynomial coefficient |
-| `emission_factors.csv` | `epsilon` | `float` | COPERT V polynomial coefficient |
-| `emission_factors.csv` | `zeta` | `float` | COPERT V polynomial coefficient |
-| `emission_factors.csv` | `eta` | `float` | COPERT V polynomial coefficient |
+| `emission_factors.csv` | `alpha` | `float` | polynomial coefficient |
+| `emission_factors.csv` | `beta` | `float` | polynomial coefficient |
+| `emission_factors.csv` | `gamma` | `float` | polynomial coefficient |
+| `emission_factors.csv` | `delta` | `float` | polynomial coefficient |
+| `emission_factors.csv` | `epsilon` | `float` | polynomial coefficient |
+| `emission_factors.csv` | `zeta` | `float` | polynomial coefficient |
+| `emission_factors.csv` | `eta` | `float` | polynomial coefficient |
 | `emission_factors.csv` | `rf` | `float` | deterioration correction factor (0.0 = no correction) |
 
-The COPERT V polynomial gives emission factor (g/km) as a function of speed
+The polynomial gives emission factor (g/km) as a function of speed
 $V$ (km/h):
 
 $$\mathrm{EF}(V) = \frac{\alpha V^2 + \beta V + \gamma + \delta/V}{\varepsilon V^2 + \zeta V + \eta} \cdot (1 - \mathrm{RF})$$
@@ -1158,7 +1162,7 @@ the link's `road_type` in config.
 
 **How grade enters.** For each link, the module looks up `grade_pct`,
 `distance_m`, and `road_type` from `network_links` by joining on `link_id`.
-`emission_factors.csv` tabulates COPERT V coefficients at discrete
+`emission_factors.csv` tabulates polynomial coefficients at discrete
 `gradient_pct` bins (typically −6, −4, −2, 0, +2, +4, +6 %) and discrete
 `load_pct` bins (0, 50, 100). For each load bin, the library evaluates the
 polynomial at every gradient bin and linearly interpolates those EF values to

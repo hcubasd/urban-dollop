@@ -9,11 +9,12 @@ class FreightDemandConfig(BaseModel):
     seed:
         RNG seed for reproducibility.  Omit or set to None for a random seed.
     sourcing_cost_per_hour:
-        EUR per hour used only in the distance-decay function when drawing
-        sender zones.  Represents the cost of supply-chain sourcing time and
-        is distinct from the vehicle-specific costs in freight_vehicle_params.csv.
+        Monetary cost per hour used only in the distance-decay function when
+        drawing sender zones.  Represents the cost of supply-chain sourcing
+        time and is distinct from the vehicle-specific costs in
+        freight_vehicle_params.csv.
     sourcing_cost_per_km:
-        EUR per km used only in the distance-decay function.
+        Monetary cost per km used only in the distance-decay function.
     distance_decay_alpha:
         Intercept (α) of the logistic distance-decay function
         f(c) = 1 / (1 + exp(α + β·ln c)).
