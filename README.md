@@ -810,17 +810,17 @@ float32 files used by the parcel pipeline. `skim_time` values are in seconds;
 
 ```toml
 [freight_demand]
-sourcing_cost_per_hour = ...   # monetary cost per hour for generalised sourcing cost
-sourcing_cost_per_km = ...     # monetary cost per km for generalised sourcing cost
-distance_decay_alpha = ...     # α intercept of the logistic decay function
-distance_decay_beta = ...      # β slope of the logistic decay function
+sourcing_cost_per_hour = 35.0   # monetary cost per hour for generalised sourcing cost
+sourcing_cost_per_km = 0.50     # monetary cost per km for generalised sourcing cost
+distance_decay_alpha = -6.172   # α intercept of the logistic decay function
+distance_decay_beta = 2.180     # β slope of the logistic decay function
 # seed = 42
 ```
 
-All four parameters are required; there are no built-in defaults because
-appropriate values are study-area specific and must be calibrated or sourced
-from the literature for the region being modelled. `seed` is optional; omit
-for a random draw each run.
+All four parameters are required and must be calibrated for the study area;
+the values above are from MASS-GT's Dutch calibration and are shown as
+illustrative examples only. `seed` is optional; omit for a random draw each
+run.
 
 **CLI:**
 
@@ -999,13 +999,14 @@ you do not need to list every sector.
 
 ```toml
 [service_trips]
-distance_decay_alpha = ...   # α intercept of the logistic decay function
-distance_decay_beta = ...    # β slope of the logistic decay function
+distance_decay_alpha = -1.5   # α intercept of the logistic decay function
+distance_decay_beta = 2.0     # β slope of the logistic decay function
 # seed = 42
 ```
 
-Both parameters are required; calibrate against observed service trip length
-distributions for the study area. `seed` is optional.
+Both parameters are required and must be calibrated for the study area; the
+values above are from MASS-GT's Dutch calibration and are shown as illustrative
+examples only. `seed` is optional.
 
 **CLI:**
 
