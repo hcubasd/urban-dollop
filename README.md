@@ -567,8 +567,8 @@ is exhausted. Firms whose employment falls below `min_employment` are
 discarded after synthesis. Surviving firms are numbered from 1 and written to
 `firms.csv`.
 
-`firms.csv` is a shared prerequisite for the freight demand and service trip
-modules. It is not consumed by the parcel pipeline.
+`firms.csv` is consumed by `generate-freight-demand`. It is not consumed by
+the parcel or service trip pipelines.
 
 **Firm size drawing.** For each firm, a size class $k$ is sampled from the
 cumulative distribution over classes ordered by `firm_size_class`:
