@@ -582,12 +582,14 @@ Employment $e$ for the firm is then drawn uniformly within the bounds
 $[a, b]$ of the selected class, where $a$ and $b$ are the `lower_bound` and
 `upper_bound` columns of `firm_size_distribution.csv`:
 
-$$e \sim U[a_{k^\ast}, b_{k^\ast}]$$
+$$e \sim U(a_{k^\ast}, b_{k^\ast})$$
 
 The draw is capped at the remaining employment in the cell, so the last firm
 in each `(zone, sector)` cell may have lower employment than its class bounds.
+The loop runs until the cell's employment budget is exactly exhausted.
 Firms with $e < e_{\min}$, where $e_{\min}$ is `min_employment` from config,
-are dropped after all synthesis loops complete.
+are then dropped. Their employment is not redistributed — it represents
+establishments too small to model explicitly.
 
 **Firm placement.** When zones are loaded from a GeoPackage, each firm is
 placed at a uniformly random point within its zone polygon using rejection
