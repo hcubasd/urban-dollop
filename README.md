@@ -706,32 +706,34 @@ The spatial disaggregation is driven entirely by the firm register and the
 make/use coefficients — no zone-level OD matrix is required. Make/use
 coefficients encode which employment sectors are likely producers and which are
 likely consumers of each commodity group: a food-processing sector has a high
-make share for food goods; a retail sector has a high use share. Each zone's
-attractiveness as a receiver and as a sender is the sum over all its firms of
-employment weighted by the sector's consumption or production share. Let $e_f$
-be the employment of firm $f$, $s_f$ its sector, $u_s$ the use share of sector
-$s$, and $m_s$ its make share:
+make share for food goods; a retail sector has a high use share. Let $e_f$ be
+the employment of firm $f$, $s_f$ its sector, $u_s$ the use share of sector
+$s$, and $m_s$ its make share. Each zone's attractiveness as a receiver and as
+a sender is the sum over its firms of employment weighted by the appropriate
+share:
 
 $$\text{recv}[j] = \sum_{f \in j} e_f \cdot u_{s_f} \qquad \text{send}[i] = \sum_{f \in i} e_f \cdot m_{s_f}$$
 
-A sender zone is further discounted by a distance-decay function so that
-distant suppliers are drawn less often (see **Distance-decay** below).
+For each logistic segment the module runs a budget-fill loop. First it draws a
+receiver zone $j$ with probability proportional to $\text{recv}[j]$. Then it
+draws a sender zone $i$ with probability proportional to
+$\text{send}[i] \cdot f(c_{ij})$, where $c_{ij}$ is the generalised sourcing
+cost from that same $i$ to the already-drawn $j$, and $f$ is a logistic decay
+function that discounts distant origins (defined in **Distance-decay** below).
 
-For each logistic segment the module runs a budget-fill loop. It draws a
-receiver zone $j$ with probability proportional to $\text{recv}[j]$, then a
-sender zone $i$ with probability proportional to $\text{send}[i] \cdot f(c_{ij})$.
-It then jointly draws a shipment size class $s$ and vehicle type $v$ from a
-multinomial logit model with choice probabilities
+For the drawn zone pair $(i, j)$, a utility $U_{sv}$ is computed for every
+combination of shipment size class $s$ and vehicle type $v$. $U_{sv}$ captures
+the tradeoff between transport cost and inventory cost: a larger shipment
+reduces the number of vehicle runs needed but ties up more capital in stock,
+and a higher-capacity vehicle costs more per trip but moves more per run (full
+definition in **Joint shipment-size × vehicle-type MNL** below). The pair
+$(s, v)$ is then drawn with probability
 
 $$P(s, v) = \frac{\exp(U_{sv})}{\displaystyle\sum_{s',v'} \exp(U_{s'v'})}$$
 
-The utility $U_{sv}$ (defined in **Joint shipment-size × vehicle-type MNL**
-below) captures the tradeoff between transport cost and inventory cost: a
-larger shipment reduces the number of vehicle runs needed but ties up more
-capital in stock, and a higher-capacity vehicle costs more per trip but moves
-more per run. The loop repeats, subtracting each shipment's weight from the
-daily budget, until the budget is exhausted; the final shipment is capped at
-the remaining weight. Output is `shipments.csv`, consumed by `schedule-freight`.
+The loop repeats, subtracting each shipment's weight from the daily budget,
+until the budget is exhausted; the final shipment is capped at the remaining
+weight. Output is `shipments.csv`, consumed by `schedule-freight`.
 
 **Distance-decay.** Sender zones are drawn with probability proportional to
 their employment-weighted production share multiplied by a logistic decay
