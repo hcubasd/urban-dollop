@@ -570,7 +570,7 @@ discarded after synthesis. Surviving firms are numbered from 1 and written to
 `firms.csv` is consumed by `generate-freight-demand`. It is not consumed by
 the parcel or service trip pipelines.
 
-**Firm size drawing.** For each firm, a size class is selected by inverse CDF.
+**Firm size drawing.** Each row of `zone_employment.csv` is a `(zone, sector)` cell with a total employment budget. The module runs an independent synthesis loop per cell, so zone and sector are fixed — only firm size is drawn. For each firm in a cell, a size class is selected by inverse CDF.
 Let $p_k$ be the share of firms in class $k$ (the `probability` column of
 `firm_size_distribution.csv`), and let $F_k = \sum_{i=1}^{k} p_i$ be the
 cumulative share up to and including class $k$. Given a uniform draw
