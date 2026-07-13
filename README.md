@@ -708,11 +708,11 @@ coefficients encode which employment sectors are likely producers and which are
 likely consumers of each commodity group: a food-processing sector has a high
 make share for food goods; a retail sector has a high use share. Each zone's
 attractiveness as a receiver and as a sender is the sum over all its firms of
-employment weighted by the sector's consumption or production share:
+employment weighted by the sector's consumption or production share. Let $e_f$
+be the employment of firm $f$, $s_f$ its sector, $u_s$ the use share of sector
+$s$, and $m_s$ its make share:
 
-$$\text{recv}[j] = \sum_{\text{firms in } j} e_f \cdot \text{use\_share}_{s_f} \qquad \text{send}[i] = \sum_{\text{firms in } i} e_f \cdot \text{make\_share}_{s_f}$$
-
-where $e_f$ is the employment of firm $f$ and $s_f$ its sector. A sender zone
+$$\text{recv}[j] = \sum_{f \in j} e_f \cdot u_{s_f} \qquad \text{send}[i] = \sum_{f \in i} e_f \cdot m_{s_f}$$ A sender zone
 is further discounted by a distance-decay function so that distant suppliers
 are drawn less often (see **Distance-decay** below).
 
