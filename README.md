@@ -582,7 +582,7 @@ Employment $e$ for the firm is then drawn uniformly within the bounds
 $[a, b]$ of the selected class, where $a$ and $b$ are the `lower_bound` and
 `upper_bound` columns of `firm_size_distribution.csv`:
 
-$$e \sim U[a_{k^\ast},\, b_{k^\ast}]$$
+$$e \sim U[a_{k^\ast}, b_{k^\ast}]$$
 
 The draw is capped at the remaining employment in the cell, so the last firm
 in each `(zone, sector)` cell may have lower employment than its class bounds.
