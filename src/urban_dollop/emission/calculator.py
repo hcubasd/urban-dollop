@@ -6,11 +6,13 @@ from urban_dollop.emission.config import EmissionCalculationConfig
 from urban_dollop.models.emission_factor import EmissionFactor
 from urban_dollop.models.link_emission import LinkEmission
 from urban_dollop.models.loaded_link import LoadedLink
+from urban_dollop.models.network_link import NetworkLink
 
 
 def calculate_emissions(
     loaded_links: list[LoadedLink],
     emission_factors: list[EmissionFactor],
+    network_links: list[NetworkLink],
     config: EmissionCalculationConfig | None = None,
 ) -> list[LinkEmission]:
     """Calculate pollutant emissions for each loaded network link.
@@ -29,6 +31,8 @@ def calculate_emissions(
         loaded_links: Network links with trip counts from assign-network.
         emission_factors: COPERT V factor table; one row per
             (vehicle_id, pollutant, gradient_pct, load_pct) cell.
+        network_links: Road network links supplying road_type, distance_m,
+            and grade_pct for each link_id in loaded_links.
         config: Speed by road type (km/h) and vehicle fill rate [0, 1].
 
     Returns:
@@ -58,28 +62,29 @@ def calculate_emissions(
     for v_id, pollutant in factor_table:
         pollutants_by_vehicle[v_id].append(pollutant)
 
+    link_attrs: dict[int, NetworkLink] = {nl.link_id: nl for nl in network_links}
+
+    _validate_link_coverage(loaded_links, link_attrs)
     _validate_vehicle_coverage(loaded_links, set(pollutants_by_vehicle))
-    _validate_road_type_coverage(loaded_links, config.speed_kmh)
+    _validate_road_type_coverage(loaded_links, link_attrs, config.speed_kmh)
     _validate_factor_grid(factor_table, grad_bins, load_bins)
 
     results: list[LinkEmission] = []
     for link in loaded_links:
-        speed = config.speed_kmh[link.road_type]
+        nl = link_attrs[link.link_id]
+        speed = config.speed_kmh[nl.road_type]
         for pollutant in sorted(pollutants_by_vehicle[link.vehicle_id]):
             factors = factor_table[(link.vehicle_id, pollutant)]
             ef_g_per_km = _interpolate_ef(
-                factors, grad_bins, load_bins, link.grade_pct, load_pct, speed
+                factors, grad_bins, load_bins, nl.grade_pct, load_pct, speed
             )
-            emission_g = link.n_trips * (link.distance_m / 1000.0) * ef_g_per_km
+            emission_g = link.n_trips * (nl.distance_m / 1000.0) * ef_g_per_km
             results.append(
                 LinkEmission(
                     link_id=link.link_id,
                     vehicle_id=link.vehicle_id,
                     hour=link.hour,
                     pollutant=pollutant,
-                    n_trips=link.n_trips,
-                    distance_m=link.distance_m,
-                    grade_pct=link.grade_pct,
                     emission_g=emission_g,
                 )
             )
@@ -112,6 +117,18 @@ def _interpolate_ef(
     return float(np.interp(load_pct, load_bins, ef_at_load))
 
 
+def _validate_link_coverage(
+    loaded_links: list[LoadedLink],
+    link_attrs: dict[int, NetworkLink],
+) -> None:
+    missing = {l.link_id for l in loaded_links} - set(link_attrs)
+    if missing:
+        raise ValueError(
+            f"Link IDs {sorted(missing)} appear in loaded_links but are not "
+            "in network_links. Provide the same network_links used by assign-network."
+        )
+
+
 def _validate_vehicle_coverage(
     loaded_links: list[LoadedLink],
     vehicles_with_factors: set[int],
@@ -126,12 +143,13 @@ def _validate_vehicle_coverage(
 
 def _validate_road_type_coverage(
     loaded_links: list[LoadedLink],
+    link_attrs: dict[int, NetworkLink],
     speed_kmh: dict[str, float],
 ) -> None:
-    missing = {l.road_type for l in loaded_links} - set(speed_kmh)
+    missing = {link_attrs[l.link_id].road_type for l in loaded_links} - set(speed_kmh)
     if missing:
         raise ValueError(
-            f"Road types {sorted(missing)} appear in loaded_links but have no "
+            f"Road types {sorted(missing)} appear in network_links but have no "
             "speed configured. Add entries to [emission_calculation.speed_kmh] "
             "in urban-dollop.toml."
         )

@@ -89,14 +89,9 @@ def assign_network(
         for link in route_links:
             counts[(link.link_id, trip.vehicle_id, trip.departure_hour)] += 1
 
-    link_attrs: dict[int, NetworkLink] = {l.link_id: l for l in links}
-
     return [
         LoadedLink(
             link_id=link_id,
-            road_type=link_attrs[link_id].road_type,
-            distance_m=link_attrs[link_id].distance_m,
-            grade_pct=link_attrs[link_id].grade_pct,
             vehicle_id=vehicle_id,
             hour=hour,
             n_trips=n_trips,

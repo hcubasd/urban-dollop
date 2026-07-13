@@ -56,24 +56,6 @@ def test_different_vehicle_types_separate_rows(network_links, zone_nodes, vehicl
     assert all(r.n_trips == 1 for r in link1_rows)
 
 
-def test_grade_pct_carried_through(network_links_with_grade, zone_nodes, vehicles):
-    links = network_links_with_grade
-    zone_nodes_subset = [zn for zn in zone_nodes if zn.zone_id in {1, 2}]
-    trips = [make_trip(1, 2)]
-    result = assign_network(trips, links, zone_nodes_subset, vehicles)
-
-    assert len(result) == 1
-    assert result[0].link_id == 1
-    assert result[0].grade_pct == 5.0
-
-
-def test_grade_pct_defaults_to_zero(network_links, zone_nodes, vehicles):
-    trips = [make_trip(1, 3)]
-    result = assign_network(trips, network_links, zone_nodes, vehicles)
-
-    assert all(r.grade_pct == 0.0 for r in result)
-
-
 def test_same_origin_destination_skipped(network_links, zone_nodes, vehicles):
     trips = [make_trip(1, 1)]
     result = assign_network(trips, network_links, zone_nodes, vehicles)
@@ -102,15 +84,6 @@ def test_missing_vehicle_id_raises(network_links, zone_nodes, vehicles):
     trips = [make_trip(1, 3, vehicle_id=99)]
     with pytest.raises(ValueError, match="Vehicle IDs"):
         assign_network(trips, network_links, zone_nodes, vehicles)
-
-
-def test_link_attributes_in_output(network_links, zone_nodes, vehicles):
-    trips = [make_trip(1, 3)]
-    result = assign_network(trips, network_links, zone_nodes, vehicles)
-
-    link1 = next(r for r in result if r.link_id == 1)
-    assert link1.road_type == "urban"
-    assert link1.distance_m == 10.0
 
 
 def test_multi_hop_route(network_links, zone_nodes, vehicles):

@@ -9,9 +9,6 @@ from urban_dollop.helpers.read_csv import read_csv
 
 class LoadedLink(BaseModel):
     link_id: int
-    road_type: str
-    distance_m: float
-    grade_pct: float
     vehicle_id: int
     hour: int | None = None
     n_trips: int

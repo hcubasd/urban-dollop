@@ -23,6 +23,6 @@ class ParcelSchedulingConfig(BaseModel):
                 raise ValueError("departure_time_distribution must be non-decreasing (cumulative shares)")
         if abs(v[-1] - 1.0) > 1e-6:
             raise ValueError(
-                f"departure_time_distribution must sum to 1.0 (last value must be 1.0), got {v[-1]}"
+                f"departure_time_distribution is a CDF: the last value must be 1.0, got {v[-1]}"
             )
         return v

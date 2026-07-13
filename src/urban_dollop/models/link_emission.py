@@ -9,9 +9,6 @@ class LinkEmission(BaseModel):
     vehicle_id: int
     hour: int | None
     pollutant: str
-    n_trips: int
-    distance_m: float
-    grade_pct: float
     emission_g: float
 
     @classmethod

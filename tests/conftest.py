@@ -235,12 +235,16 @@ def emission_factors():
 
 
 @pytest.fixture
+def network_links_simple():
+    return [
+        NetworkLink(link_id=1, from_node_id=1, to_node_id=2, distance_m=1000.0, road_type="urban", grade_pct=0.0),
+    ]
+
+
+@pytest.fixture
 def loaded_links_simple():
     return [
-        LoadedLink(
-            link_id=1, road_type="urban", distance_m=1000.0,
-            grade_pct=0.0, vehicle_id=1, n_trips=1,
-        ),
+        LoadedLink(link_id=1, vehicle_id=1, n_trips=1),
     ]
 
 

@@ -567,36 +567,35 @@ that carries at least one trip.
 | field | type | description |
 |---|---|---|
 | `link_id` | `int` | joins back to `network_links` |
-| `road_type` | `str` | `urban`, `rural`, or `highway` |
-| `distance_m` | `float` | link length in metres |
-| `grade_pct` | `float` | average grade (0.0 if not provided in input) |
 | `vehicle_id` | `int` | vehicle type traversing this link |
-| `hour` | `int \| null` | departure hour (0–23); present only when upstream trips carry `departure_hour` |
+| `hour` | `int \| null` | departure hour (0–23); `null` when trips have no `departure_hour` |
 | `n_trips` | `int` | number of traversals by this vehicle type (and hour, if disaggregated) |
 
 **Canonical inputs:**
 
 | file | field | type | description |
 |---|---|---|---|
-| `*_trips.csv` | *(all fields)* | — | one or more trip files from upstream schedulers (e.g. `parcel_trips.csv`, `freight_trips.csv`) |
+| `*_trips.csv` | `origin_zone_id` | `int` | zone where the trip leg originates |
+| `*_trips.csv` | `destination_zone_id` | `int` | zone where the trip leg ends |
+| `*_trips.csv` | `vehicle_id` | `int` | vehicle type for this leg |
+| `*_trips.csv` | `departure_hour` | `int \| null` | hour of departure (0–23); enables hourly disaggregation |
 | `network_links.gpkg` | `link_id` | `int` | unique link identifier |
 | `network_links.gpkg` | `from_node_id` | `int` | origin node |
 | `network_links.gpkg` | `to_node_id` | `int` | destination node |
+| `network_links.gpkg` | `distance_m` | `float` | link length used as Dijkstra edge weight; derived from geometry if absent |
 | `network_links.gpkg` | `road_type` | `str` | `urban`, `rural`, or `highway` |
 | `network_links.gpkg` | `grade_pct` | `float` | average grade %; defaults to 0.0 if column absent |
 | `zone_nodes.csv` | `zone_id` | `int` | zone identifier |
 | `zone_nodes.csv` | `node_id` | `int` | network gateway node for trips entering or leaving this zone |
-| `vehicles.csv` | *(all fields)* | — | same file as `schedule-deliveries` |
+| `vehicles.csv` | `vehicle_id` | `int` | validates that all `vehicle_id` values in trips are known |
 
-`network_links.csv` is also accepted; requires an explicit `distance_m` column
-since there is no geometry to derive it from. When loading from a GeoPackage,
-`distance_m` is derived from the LineString geometry automatically if the column
-is absent.
-
-`zone_nodes.csv` maps each zone to its entry point in the road network — the
-node where vehicles from that zone join or leave the graph. This is a flat
-two-column lookup; how the mapping is determined (e.g. nearest node to zone
-centroid) is left to the user.
+One or more `*_trips.csv` files may be present (e.g. `parcel_trips.csv`,
+`freight_trips.csv`); they are concatenated automatically. `network_links.csv`
+is also accepted; `distance_m` must then be an explicit column. `zone_nodes.csv`
+maps each zone to its entry point in the road network — the node where vehicles
+join or leave the graph. This two-column file is study-area specific. `road_type`
+and `grade_pct` are not used by the router itself, but they must be present
+because the same `network_links.gpkg` is also required by `calculate-emissions`.
 
 **Config — `[network_assignment]` in `urban-dollop.toml`:**
 
@@ -616,8 +615,7 @@ urban-dollop assign-network --outdir results/ data/
 
 Reads all `*_trips.csv` files found in `data/`, plus `network_links.gpkg` (or
 `.csv`), `zone_nodes.csv`, and `vehicles.csv`. Writes `loaded_links.csv` to
-the current directory by default. Multiple trip files (parcel, freight, service)
-are concatenated automatically.
+the current directory by default.
 
 **Python API:**
 
@@ -647,32 +645,37 @@ LoadedLink.to_file(result, "loaded_links.csv")
 ### calculate-emissions
 
 Calculates pollutant emissions for each loaded network link using COPERT V
-emission factors. For each (link, vehicle, pollutant) combination, it
-interpolates the emission factor (g/km) across both road gradient and vehicle
-load using bilinear interpolation, then multiplies by trip count and link length.
+emission factors. For each (link, vehicle, pollutant) combination, it reads
+the link's road attributes from `network_links`, interpolates the emission
+factor (g/km) across both road gradient and vehicle load using bilinear
+interpolation, then multiplies by trip count and link length.
 
-Road grade flows directly from `loaded_links.csv` — the novel contribution of
-this library relative to the original MASS-GT code, which does not account for
-topography in emission accounting.
+Grade-sensitive interpolation per link — rather than a single representative EF
+per road type — is the core improvement over the original MASS-GT code, which
+does not account for topography in emission accounting.
 
 **Canonical output — `link_emissions.csv`:**
 
 | field | type | description |
 |---|---|---|
-| `link_id` | `int` | joins back to `loaded_links` |
+| `link_id` | `int` | joins back to `network_links` and `loaded_links` |
 | `vehicle_id` | `int` | vehicle type |
 | `hour` | `int \| null` | departure hour (0–23); `null` when not disaggregated |
 | `pollutant` | `str` | pollutant name (e.g. `CO2`, `NOx`, `PM10`) |
-| `n_trips` | `int` | number of vehicle traversals |
-| `distance_m` | `float` | link length in metres |
-| `grade_pct` | `float` | average grade used in EF interpolation |
-| `emission_g` | `float` | total grams emitted: `n_trips × (distance_m/1000) × EF` |
+| `emission_g` | `float` | total grams emitted: $n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$ |
 
 **Canonical inputs:**
 
 | file | field | type | description |
 |---|---|---|---|
-| `loaded_links.csv` | *(all fields)* | — | output from `assign-network` |
+| `loaded_links.csv` | `link_id` | `int` | output from `assign-network` |
+| `loaded_links.csv` | `vehicle_id` | `int` | vehicle type |
+| `loaded_links.csv` | `hour` | `int \| null` | departure hour |
+| `loaded_links.csv` | `n_trips` | `int` | traversal count |
+| `network_links.gpkg` | `link_id` | `int` | joins to `loaded_links.link_id` |
+| `network_links.gpkg` | `road_type` | `str` | selects speed from `speed_kmh` config |
+| `network_links.gpkg` | `distance_m` | `float` | link length in metres |
+| `network_links.gpkg` | `grade_pct` | `float` | average grade %; defaults to 0.0 if absent |
 | `emission_factors.csv` | `vehicle_id` | `int` | vehicle type these factors apply to |
 | `emission_factors.csv` | `pollutant` | `str` | pollutant name |
 | `emission_factors.csv` | `gradient_pct` | `float` | road gradient bin (e.g. −6, −4, −2, 0, 2, 4, 6) |
@@ -692,8 +695,7 @@ $V$ (km/h):
 $$\mathrm{EF}(V) = \frac{\alpha V^2 + \beta V + \gamma + \delta/V}{\varepsilon V^2 + \zeta V + \eta} \cdot (1 - \mathrm{RF})$$
 
 The seven coefficients $\alpha, \beta, \gamma, \delta, \varepsilon, \zeta, \eta$
-and the deterioration factor RF are vehicle- and pollutant-specific. Total
-emissions for a link are $E = n_\text{trips} \times (d_m / 1000) \times \mathrm{EF}(V)$.
+and the deterioration factor RF are vehicle- and pollutant-specific.
 
 **How grade enters.** `emission_factors.csv` tabulates a full set of
 coefficients for every `(vehicle_id, pollutant, gradient_pct, load_pct)`
@@ -701,9 +703,7 @@ combination. For each tabulated load bin, the library evaluates the COPERT V
 polynomial at each tabulated gradient bin and linearly interpolates the
 resulting EF values to the link's actual `grade_pct`. Those per-load EF values
 are then linearly interpolated to the configured `fill_rate`. Grade values
-outside the tabulated bin range are clamped. This per-link grade-sensitive
-interpolation — rather than a single representative EF per road type — is the
-core improvement over the original MASS-GT implementation.
+outside the tabulated bin range are clamped.
 
 For non-exhaust PM (tyre, brake, road wear), the polynomial reduces to a
 constant rate — set $\alpha = \beta = \delta = 0$, $\varepsilon = \zeta = 0$,
@@ -725,8 +725,8 @@ highway = 120.0
 ```
 
 Both `fill_rate` (vehicle load as a fraction, 0.0–1.0) and `speed_kmh` (mapping
-from `road_type` to speed) are required. Speed maps directly to the `road_type`
-values in `loaded_links.csv` — add an entry for every road type in your network.
+from `road_type` to speed) are required. Add an entry for every road type in
+your network.
 
 **CLI:**
 
@@ -735,23 +735,26 @@ urban-dollop calculate-emissions data/
 urban-dollop calculate-emissions --outdir results/ data/
 ```
 
-Reads `loaded_links.csv` and `emission_factors.csv` from `data/`. Writes
-`link_emissions.csv` to the current directory by default.
+Reads `loaded_links.csv`, `network_links.gpkg` (or `.csv`), and
+`emission_factors.csv` from `data/`. Writes `link_emissions.csv` to the current
+directory by default.
 
 **Python API:**
 
 ```python
 from urban_dollop import (
     EmissionCalculationConfig, EmissionFactor, LinkEmission, LoadedLink,
-    calculate_emissions,
+    NetworkLink, calculate_emissions,
 )
 
 loaded_links = LoadedLink.from_file("loaded_links.csv")
+network_links = NetworkLink.from_file("network_links.gpkg")
 emission_factors = EmissionFactor.from_file("emission_factors.csv")
 
 result = calculate_emissions(
     loaded_links=loaded_links,
     emission_factors=emission_factors,
+    network_links=network_links,
     config=EmissionCalculationConfig(
         speed_kmh={"urban": 30.0, "rural": 80.0, "highway": 120.0},
         fill_rate=0.5,
