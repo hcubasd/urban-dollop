@@ -18,8 +18,8 @@ class ServiceTripConfig(BaseModel):
     """
 
     seed: int | None = None
-    distance_decay_alpha: float = -1.5
-    distance_decay_beta: float = 2.0
+    distance_decay_alpha: float
+    distance_decay_beta: float
 
     @classmethod
     def from_toml(cls, path: str | Path, section: str = "service_trips") -> "ServiceTripConfig":

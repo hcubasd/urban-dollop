@@ -23,10 +23,10 @@ class FreightDemandConfig(BaseModel):
     """
 
     seed: int | None = None
-    sourcing_cost_per_hour: float = 35.0
-    sourcing_cost_per_km: float = 0.50
-    distance_decay_alpha: float = -6.172
-    distance_decay_beta: float = 2.180
+    sourcing_cost_per_hour: float
+    sourcing_cost_per_km: float
+    distance_decay_alpha: float
+    distance_decay_beta: float
 
     @classmethod
     def from_toml(cls, path: str | Path, section: str = "freight_demand") -> "FreightDemandConfig":

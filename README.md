@@ -741,8 +741,11 @@ $$f(c_{ij}) = \frac{1}{1 + \exp(\alpha + \beta \ln c_{ij})}$$
 
 where $c_{ij} = c_h \cdot t_{ij} / 3600 + c_d \cdot d_{ij} / 1000$ is the
 generalised sourcing cost from origin zone $i$ to destination zone $j$, with
-$c_h$ (cost per hour) and $c_d$ (cost per km) from config. High cost → low decay →
-lower probability of being selected as sender.
+$c_h$ (cost per hour) and $c_d$ (cost per km) from config. $\alpha$ and
+$\beta$ are `distance_decay_alpha` and `distance_decay_beta` in config,
+with defaults calibrated on the Netherlands from MASS-GT; replace with
+study-area estimates. High cost → low decay → lower probability of being
+selected as sender.
 
 **Joint shipment-size × vehicle-type MNL.** For each alternative
 $(s, v)$ — a combination of size class $s$ and vehicle type $v$ — the utility
@@ -805,16 +808,17 @@ float32 files used by the parcel pipeline. `skim_time` values are in seconds;
 
 ```toml
 [freight_demand]
-sourcing_cost_per_hour = 35.0
-sourcing_cost_per_km = 0.50
-distance_decay_alpha = -6.172
-distance_decay_beta = 2.180
+sourcing_cost_per_hour = ...   # monetary cost per hour for generalised sourcing cost
+sourcing_cost_per_km = ...     # monetary cost per km for generalised sourcing cost
+distance_decay_alpha = ...     # α intercept of the logistic decay function
+distance_decay_beta = ...      # β slope of the logistic decay function
 # seed = 42
 ```
 
-All five parameters have defaults matching MASS-GT calibration values for the
-Netherlands; replace with study-area estimates. `seed` is optional; omit for a
-random draw each run.
+All four parameters are required; there are no built-in defaults because
+appropriate values are study-area specific and must be calibrated or sourced
+from the literature for the region being modelled. `seed` is optional; omit
+for a random draw each run.
 
 **CLI:**
 
@@ -993,14 +997,13 @@ you do not need to list every sector.
 
 ```toml
 [service_trips]
-distance_decay_alpha = -1.5
-distance_decay_beta = 2.0
+distance_decay_alpha = ...   # α intercept of the logistic decay function
+distance_decay_beta = ...    # β slope of the logistic decay function
 # seed = 42
 ```
 
-The default α/β values are a starting point only — calibrate against
-observed service trip length distributions for the study area. `seed` is
-optional.
+Both parameters are required; calibrate against observed service trip length
+distributions for the study area. `seed` is optional.
 
 **CLI:**
 

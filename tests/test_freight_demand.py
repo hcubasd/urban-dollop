@@ -58,7 +58,13 @@ def basic_mnl_params() -> list[FreightMNLParam]:
 
 
 def basic_config(seed: int = 0) -> FreightDemandConfig:
-    return FreightDemandConfig(seed=seed)
+    return FreightDemandConfig(
+        seed=seed,
+        sourcing_cost_per_hour=35.0,
+        sourcing_cost_per_km=0.50,
+        distance_decay_alpha=-6.172,
+        distance_decay_beta=2.180,
+    )
 
 
 def run(**kwargs):
@@ -147,7 +153,7 @@ def test_last_shipment_capped_at_remaining_weight():
     shipments = run(
         freight_totals=[FreightTotal(logistic_segment=1, tonnes_day=1.25)],
         size_classes=[ShipmentSizeClass(logistic_segment=1, size_class=1, weight_kg=500.0)],
-        config=FreightDemandConfig(seed=0),
+        config=basic_config(seed=0),
     )
     total = sum(s.weight_kg for s in shipments)
     assert total == pytest.approx(1250.0, abs=1e-6)
@@ -241,8 +247,8 @@ def test_ls_specific_param_overrides_global():
 # ── reproducibility ───────────────────────────────────────────────────────────
 
 def test_seed_makes_synthesis_reproducible():
-    s1 = run(config=FreightDemandConfig(seed=42))
-    s2 = run(config=FreightDemandConfig(seed=42))
+    s1 = run(config=basic_config(seed=42))
+    s2 = run(config=basic_config(seed=42))
     assert len(s1) == len(s2)
     assert s1[0].origin_zone_id == s2[0].origin_zone_id
     assert s1[0].destination_zone_id == s2[0].destination_zone_id
@@ -251,11 +257,11 @@ def test_seed_makes_synthesis_reproducible():
 def test_different_seeds_give_different_results():
     s1 = run(
         freight_totals=[FreightTotal(logistic_segment=1, tonnes_day=20.0)],
-        config=FreightDemandConfig(seed=1),
+        config=basic_config(seed=1),
     )
     s2 = run(
         freight_totals=[FreightTotal(logistic_segment=1, tonnes_day=20.0)],
-        config=FreightDemandConfig(seed=2),
+        config=basic_config(seed=2),
     )
     origins1 = [s.origin_zone_id for s in s1]
     origins2 = [s.origin_zone_id for s in s2]

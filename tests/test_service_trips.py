@@ -33,7 +33,7 @@ def basic_shares() -> list[ServiceVehicleShare]:
 
 
 def basic_config(seed: int = 0) -> ServiceTripConfig:
-    return ServiceTripConfig(seed=seed)
+    return ServiceTripConfig(seed=seed, distance_decay_alpha=-1.5, distance_decay_beta=2.0)
 
 
 def run(**kwargs):
@@ -100,7 +100,7 @@ def test_trip_count_close_to_expected():
             ZoneEmployment(zone_id=2, employment_sector=1, employment=100.0),
         ],
         trip_rates=[ServiceTripRate(employment_sector=1, trips_per_employee=0.1)],
-        config=ServiceTripConfig(seed=0),
+        config=basic_config(seed=0),
     )
     assert 15 <= len(trips) <= 25
 
@@ -128,7 +128,7 @@ def test_multiple_sectors_both_contribute():
     trips = generate_service_trips(
         zone_employment=employment, trip_rates=rates,
         vehicle_shares=basic_shares(), skim_time=skim,
-        config=ServiceTripConfig(seed=0),
+        config=basic_config(seed=0),
     )
     # Expected ≈ 100 trips from sector 1 + sector 2
     assert len(trips) > 0
@@ -196,8 +196,8 @@ def test_single_vehicle_always_assigned():
 # ── reproducibility ───────────────────────────────────────────────────────────
 
 def test_seed_makes_output_reproducible():
-    t1 = run(config=ServiceTripConfig(seed=99))
-    t2 = run(config=ServiceTripConfig(seed=99))
+    t1 = run(config=basic_config(seed=99))
+    t2 = run(config=basic_config(seed=99))
     assert len(t1) == len(t2)
     assert t1[0].destination_zone_id == t2[0].destination_zone_id
 
