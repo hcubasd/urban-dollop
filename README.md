@@ -42,9 +42,31 @@ or neither between demand generation and scheduling. The freight pipeline
 (`synthesize-firms` → `generate-freight-demand` → `schedule-freight`) and the
 service pipeline (`generate-service-trips`) are independent of the parcel
 pipeline and converge at `assign-network`, which reads all `*_trips.csv` files
-present in the input directory. All steps read inputs from a required directory
-argument and write output to the current directory by default. All steps are
-configured via `urban-dollop.toml` in the working directory.
+present in the input directory.
+
+**Directory layout.** Each command takes a directory of input files and writes
+output to the current working directory by default. `urban-dollop.toml` is
+always read from the working directory, not the input directory. A typical
+scenario looks like:
+
+```
+my-scenario/
+├── urban-dollop.toml   # config for all modules
+├── data/               # input files passed as the directory argument
+│   ├── zones.gpkg
+│   ├── skim_time.mtx
+│   └── ...
+└── results/            # optional: use --outdir results/ to write here
+```
+
+Run commands from `my-scenario/` so that `urban-dollop.toml` is found in the
+working directory:
+
+```bash
+cd my-scenario/
+urban-dollop generate-demand data/
+urban-dollop schedule-deliveries --outdir results/ data/
+```
 
 ---
 
