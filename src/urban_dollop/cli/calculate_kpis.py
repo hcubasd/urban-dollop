@@ -35,7 +35,7 @@ def run_calculate_kpis(input_dir: str, outdir: str | None) -> int:
     freight_trips = FreightTrip.from_file(data / "freight_trips.csv") if (data / "freight_trips.csv").exists() else None
     service_trips = ServiceTrip.from_file(data / "service_trips.csv") if (data / "service_trips.csv").exists() else None
 
-    config_path = data / "urban-dollop.toml"
+    config_path = Path.cwd() / "urban-dollop.toml"
     config = KPIConfig.from_toml(config_path) if config_path.exists() else KPIConfig()
 
     kpis = calculate_kpis(
