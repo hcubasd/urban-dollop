@@ -112,7 +112,7 @@ def logit_config():
         beta_urbanization={1: 0.0, 2: 0.5},
         mu_thresholds=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
         parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
-        monthly_to_daily_divisor=60.0,
+        reference_period_days=60.0,
     )
 
 

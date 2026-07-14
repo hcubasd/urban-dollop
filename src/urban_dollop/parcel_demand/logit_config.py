@@ -4,9 +4,9 @@ from pydantic import BaseModel, field_validator, model_validator
 class LogitDemandConfig(BaseModel):
     """Calibration parameters for the HARMONY v3 ordered logit parcel demand model.
 
-    The logit model computes expected monthly B2C parcels per person using an
-    ordered logit over urbanization level, then converts to daily demand and
-    multiplies by zone population.
+    The logit model computes expected B2C parcels per person over a survey
+    reference period using an ordered logit over urbanization level, then
+    converts to daily demand and multiplies by zone population.
 
     beta_urbanization maps each urbanization level integer to its linear predictor
     coefficient. Zones whose urbanization_level is not present in the mapping
@@ -23,7 +23,7 @@ class LogitDemandConfig(BaseModel):
     beta_urbanization: dict[int, float]
     mu_thresholds: list[float]
     parcel_levels: list[int]
-    monthly_to_daily_divisor: float
+    reference_period_days: float
     beta_age: dict[int, float] | None = None
     beta_income: dict[int, float] | None = None
     calibration_target: float | None = None
@@ -50,7 +50,7 @@ class LogitDemandConfig(BaseModel):
             )
         return self
 
-    @field_validator("monthly_to_daily_divisor")
+    @field_validator("reference_period_days")
     @classmethod
     def divisor_must_be_positive(cls, v: float) -> float:
         if v <= 0:

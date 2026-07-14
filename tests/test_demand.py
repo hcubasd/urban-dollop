@@ -172,7 +172,7 @@ def test_logit_config_raises_for_wrong_mu_length():
             beta_urbanization={1: 0.0},
             mu_thresholds=[1.0, 2.0],  # 2 thresholds requires 3 parcel levels
             parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
-            monthly_to_daily_divisor=60.0,
+            reference_period_days=60.0,
         )
 
 
@@ -189,7 +189,7 @@ def test_logit_higher_urbanization_produces_more_demand(depots, carriers, skim):
         beta_urbanization={1: 0.0, 2: 2.0},
         mu_thresholds=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
         parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
-        monthly_to_daily_divisor=60.0,
+        reference_period_days=60.0,
     )
     low_total = sum(
         d.n_parcels
@@ -221,7 +221,7 @@ def _strata_config(depots, carriers, skim, logit_config):
         beta_urbanization=logit_config.beta_urbanization,
         mu_thresholds=logit_config.mu_thresholds,
         parcel_levels=logit_config.parcel_levels,
-        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        reference_period_days=logit_config.reference_period_days,
         beta_age={1: 0.0, 2: 0.5},
         beta_income={1: 0.0, 2: 1.0},
     )
@@ -239,7 +239,7 @@ def test_stratified_higher_income_produces_more_demand(depots, carriers, skim, l
         beta_urbanization={1: 0.0},
         mu_thresholds=logit_config.mu_thresholds,
         parcel_levels=logit_config.parcel_levels,
-        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        reference_period_days=logit_config.reference_period_days,
         beta_age={1: 0.0},
         beta_income={1: 0.0, 2: 2.0},
     )
@@ -273,13 +273,13 @@ def test_stratified_strata_sum_equals_urbanization_only_when_betas_zero(
         beta_urbanization={1: 0.3},
         mu_thresholds=logit_config.mu_thresholds,
         parcel_levels=logit_config.parcel_levels,
-        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        reference_period_days=logit_config.reference_period_days,
     )
     config_strata = LogitDemandConfig(
         beta_urbanization={1: 0.3},
         mu_thresholds=logit_config.mu_thresholds,
         parcel_levels=logit_config.parcel_levels,
-        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        reference_period_days=logit_config.reference_period_days,
         beta_age={1: 0.0},
         beta_income={1: 0.0},
     )
@@ -308,7 +308,7 @@ def test_stratified_raises_when_zone_missing_strata(depots, carriers, skim, logi
         beta_urbanization={1: 0.0},
         mu_thresholds=logit_config.mu_thresholds,
         parcel_levels=logit_config.parcel_levels,
-        monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+        reference_period_days=logit_config.reference_period_days,
         beta_age={1: 0.0},
         beta_income={1: 0.0},
     )
@@ -323,6 +323,6 @@ def test_logit_config_raises_when_only_one_demographic_beta_provided(logit_confi
             beta_urbanization={1: 0.0},
             mu_thresholds=logit_config.mu_thresholds,
             parcel_levels=logit_config.parcel_levels,
-            monthly_to_daily_divisor=logit_config.monthly_to_daily_divisor,
+            reference_period_days=logit_config.reference_period_days,
             beta_age={1: 0.0},
         )

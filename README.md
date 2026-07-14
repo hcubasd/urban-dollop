@@ -180,10 +180,11 @@ classification rather than household and employment counts. This formulation is
 adapted from the HARMONY v3 demand model.
 
 The model treats parcel ordering as an ordered discrete choice. `parcel_levels`
-defines the ordered categories of monthly parcel volume a resident can belong to
-(e.g. 0, 1, 2, … parcels per month). For a zone with urbanization class $u$,
-the linear predictor is $\eta = \beta_u$, and the probability that a resident
-orders at most $L_k$ parcels per month is:
+defines the ordered categories of parcel volume a resident can belong to over
+the survey reference period (e.g. 0, 1, 2, … parcels per reference period). For
+a zone with urbanization class $u$, the linear predictor is $\eta = \beta_u$,
+and the probability that a resident orders at most $L_k$ parcels per reference
+period is:
 
 $$P(X \leq L_k) = \frac{1}{1 + \exp(\eta - \mu_k)}$$
 
@@ -193,9 +194,9 @@ consecutive differences of the cumulative distribution:
 
 $$p_k = P(X \leq L_k) - P(X \leq L_{k-1}), \quad P(X \leq L_{-1}) = 0$$
 
-Expected monthly parcels per person is the probability-weighted sum over all
-levels. Writing $N$ for zone `population` and $T$ for `monthly_to_daily_divisor`,
-daily zone demand is:
+Expected parcels per person over the reference period is the probability-weighted
+sum over all levels. Writing $N$ for zone `population` and $T$ for
+`reference_period_days`, daily zone demand is:
 
 $$D = \frac{N}{T} \sum_k p_k \cdot L_k$$
 
@@ -240,7 +241,7 @@ to the linear formulation.
 [parcel_demand_logit]
 mu_thresholds = [-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0]
 parcel_levels = [0, 1, 2, 3, 4, 5, 10, 15, 20]
-monthly_to_daily_divisor = 60.0
+reference_period_days = 60.0
 # beta_age = {1 = -0.2, 2 = 0.3}
 # beta_income = {1 = -0.5, 2 = 0.0, 3 = 0.8}
 # calibration_target = 50000
@@ -287,7 +288,7 @@ demands = generate_logit_demand(
         beta_income={1: -0.5, 2: 0.0, 3: 0.8},
         mu_thresholds=[-0.5, 1.0, 2.0, 2.8, 3.5, 4.0, 5.5, 7.0],
         parcel_levels=[0, 1, 2, 3, 4, 5, 10, 15, 20],
-        monthly_to_daily_divisor=60.0,
+        reference_period_days=60.0,
     ),
 )
 ParcelDemand.to_file(demands, "parcel_demand.csv")

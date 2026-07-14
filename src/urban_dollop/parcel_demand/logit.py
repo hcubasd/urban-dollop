@@ -104,9 +104,9 @@ def _zone_daily_demand(zone: LogitZone, config: LogitDemandConfig) -> float:
     for i in range(1, len(config.parcel_levels)):
         probs.append(cprobs[i] - cprobs[i - 1])
 
-    # Expected parcels per person (monthly), then convert to daily
-    expected_monthly_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
-    return expected_monthly_pp / config.monthly_to_daily_divisor * zone.population
+    # Expected parcels per person over the reference period, then convert to daily
+    expected_period_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
+    return expected_period_pp / config.reference_period_days * zone.population
 
 
 def _zone_daily_demand_stratified(zone: LogitZone, config: LogitDemandConfig) -> float:
@@ -123,8 +123,8 @@ def _zone_daily_demand_stratified(zone: LogitZone, config: LogitDemandConfig) ->
             probs = [cprobs[0]]
             for i in range(1, len(config.parcel_levels)):
                 probs.append(cprobs[i] - cprobs[i - 1])
-            expected_monthly_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
-            total += expected_monthly_pp / config.monthly_to_daily_divisor * stratum_pop
+            expected_period_pp = sum(pr * lv for pr, lv in zip(probs, config.parcel_levels))
+            total += expected_period_pp / config.reference_period_days * stratum_pop
     return total
 
 
