@@ -1313,7 +1313,7 @@ run together.
 |---|---|---|
 | `loaded_links.csv` | yes | output of `assign-network` |
 | `network_links.gpkg` or `network_links.csv` | yes | provides `distance_m` per link |
-| `link_emissions.csv` | yes | output of `calculate-emissions` |
+| `link_emissions.csv` | no | output of `calculate-emissions`; omit to skip emission rows |
 | `parcel_trips.csv` | no | output of `schedule-deliveries` |
 | `freight_trips.csv` | no | output of `schedule-freight` |
 | `service_trips.csv` | no | output of `generate-service-trips` |

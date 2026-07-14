@@ -132,6 +132,12 @@ def test_emissions_empty():
     assert not any(k.indicator == "emissions" for k in kpis)
 
 
+def test_emissions_absent_produces_no_emission_rows():
+    # link_emissions defaults to [] in run(); same behaviour as explicit empty list
+    kpis = run(link_emissions=[])
+    assert not any(k.indicator == "emissions" for k in kpis)
+
+
 # ── trip counts ───────────────────────────────────────────────────────────────
 
 def test_trip_count_all_none_gives_zeros():

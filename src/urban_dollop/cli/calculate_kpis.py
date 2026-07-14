@@ -16,11 +16,8 @@ def run_calculate_kpis(input_dir: str, outdir: str | None) -> int:
     data = Path(input_dir)
 
     loaded_links_path = data / "loaded_links.csv"
-    emissions_path = data / "link_emissions.csv"
-
-    for p in (loaded_links_path, emissions_path):
-        if not p.exists():
-            raise CLIError(f"Required file not found: {p}")
+    if not loaded_links_path.exists():
+        raise CLIError(f"Required file not found: {loaded_links_path}")
 
     network_path = data / "network_links.gpkg"
     if not network_path.exists():
@@ -30,7 +27,9 @@ def run_calculate_kpis(input_dir: str, outdir: str | None) -> int:
 
     loaded_links = LoadedLink.from_file(loaded_links_path)
     network_links = NetworkLink.from_file(network_path)
-    link_emissions = LinkEmission.from_file(emissions_path)
+
+    emissions_path = data / "link_emissions.csv"
+    link_emissions = LinkEmission.from_file(emissions_path) if emissions_path.exists() else []
 
     parcel_trips = DeliveryTrip.from_file(data / "parcel_trips.csv") if (data / "parcel_trips.csv").exists() else None
     freight_trips = FreightTrip.from_file(data / "freight_trips.csv") if (data / "freight_trips.csv").exists() else None
