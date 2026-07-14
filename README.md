@@ -959,25 +959,39 @@ employment and calibrated trip rates, and writes `service_trips.csv` directly
 without a scheduling step. `service_trips.csv` is then picked up by
 `assign-network` alongside parcel and freight trips.
 
-Trip production for each origin zone is $P_i = \sum_s E_{is} \cdot r_s$,
-where $E_{is}$ is employment in sector $s$ and $r_s$ is the daily trip
-production rate for that sector. Fractional counts are resolved
-stochastically: each zone emits $\lfloor P_i \rfloor$ trips plus one
-additional trip with probability $P_i - \lfloor P_i \rfloor$.
+**Step 1 — Trip production.** For each origin zone $i$, let $E_{is}$ be
+employment in sector $s$ and $r_s$ the daily trip rate for that sector from
+`service_trip_rates.csv`. The expected number of trips produced by zone $i$ is:
 
-**Destination choice.** Each trip's destination is drawn from zones weighted
-by total employment and a logistic distance-decay function of travel time:
+$$P_i = \sum_s E_{is} \cdot r_s$$
 
-$$P(\text{dest} = j \mid \text{origin} = i) \propto E_j \cdot f(t_{ij})$$
+The integer part $\lfloor P_i \rfloor$ is produced deterministically. The
+fractional remainder is resolved by drawing $u_1 \sim U(0, 1)$: one additional
+trip is emitted if $u_1 < P_i - \lfloor P_i \rfloor$, otherwise zero. This
+gives an unbiased integer trip count in expectation.
 
-$$f(t) = \frac{1}{1 + \exp(\alpha + \beta \ln t)}$$
+**Step 2 — Draw destination zone $j$.** Let $E_j = \sum_s E_{js}$ be total
+employment in zone $j$ across all sectors, and let $t_{ij}$ be the travel time
+in minutes from `skim_time.mtx`. The decay function
 
-where $t = t_{ij}$ is travel time in minutes and $E_j$ is total employment
-in zone $j$ across all sectors. Calibrate $\alpha$ and $\beta$ against
-observed service trip length distributions.
+$$f(t_{ij}) = \frac{1}{1 + \exp(\alpha + \beta \ln t_{ij})}$$
 
-**Vehicle assignment.** Vehicle type is drawn independently per trip from the
-shares in `service_vehicle_shares.csv`, which must sum to 1.0.
+discounts distant zones, with $\alpha$ (`distance_decay_alpha`) and $\beta$
+(`distance_decay_beta`) from config. Normalize the product $E_j \cdot f(t_{ij})$
+over all zones into a CDF:
+
+$$p_j = \frac{E_j \cdot f(t_{ij})}{\displaystyle\sum_k E_k \cdot f(t_{ik})}, \qquad F_j = \sum_{k=1}^{j} p_k$$
+
+Draw $u_2 \sim U(0, 1)$ and set $j = \min\{k : F_k > u_2\}$.
+
+**Step 3 — Draw vehicle type.** Let $\sigma_v$ be the share of vehicle type
+$v$ from `service_vehicle_shares.csv`, with $\sum_v \sigma_v = 1$. Form a CDF
+over vehicle types:
+
+$$F_v = \sum_{v' \leq v} \sigma_{v'}$$
+
+Draw $u_3 \sim U(0, 1)$ and set $v = \min\{v' : F_{v'} > u_3\}$. Steps 2 and
+3 repeat independently for each trip produced in Step 1.
 
 **Canonical output — `service_trips.csv`:**
 
