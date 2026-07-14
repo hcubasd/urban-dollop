@@ -757,12 +757,11 @@ the MNL utility:
 $$U_{sv} = B_{TC} \cdot \left\lceil \frac{w_s}{\kappa_v} \right\rceil \cdot (c_h^v \cdot t_{ij} + c_d^v \cdot d_{ij}) + B_{IC} \cdot w_s + \text{ASC}_v + \text{ASC}_s$$
 
 where $\lceil w_s / \kappa_v \rceil$ is the number of vehicle trips required to
-move the shipment, $B_{TC}$ and $B_{IC}$ are cost sensitivity coefficients,
-and $\text{ASC}_v$, $\text{ASC}_s$ are alternative-specific constants — all
-from `freight_mnl_params.csv`. $B_{TC}$ and $B_{IC}$ are negative: higher
-transport cost or heavier inventory penalises utility. $\text{ASC}_v$ and
-$\text{ASC}_s$ capture residual preferences not explained by cost. Form a CDF
-over all $|S| \times |V|$ alternatives:
+move the shipment. The four coefficients $B_{TC}, B_{IC}, \text{ASC}_v, \text{ASC}_s$
+all come from `freight_mnl_params.csv`: the $B$ coefficients are negative
+(higher transport cost or heavier inventory penalises utility) and the
+$\text{ASC}$ terms capture residual preferences not explained by cost. Form a
+CDF over all $|S| \times |V|$ alternatives:
 
 $$P(s, v) = \frac{\exp(U_{sv})}{\displaystyle\sum_{s',v'} \exp(U_{s'v'})}, \qquad F_{sv} = \sum_{(s',v') \leq (s,v)} P(s', v')$$
 
