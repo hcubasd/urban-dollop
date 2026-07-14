@@ -9,23 +9,6 @@ parameters so the same pipeline can be applied to any city.
 
 ---
 
-## Modules
-
-| Module | MASS-GT source | Status |
-|---|---|---|
-| Parcel demand generation | `parcel_dmnd` | implemented |
-| Parcel consolidation (UCCs + microhubs) | `parcel_dmnd` | implemented |
-| Parcel delivery scheduling | `parcel_schd` | implemented |
-| Firm synthesizer | `fs` | implemented |
-| Freight shipment demand | `ship` | implemented |
-| Freight tour scheduling | `tour` | implemented |
-| Service trip demand | `service` | implemented |
-| Network / route assignment | `traf` | implemented |
-| Emission calculation (speed-polynomial + grade) | `traf` + grade extension | implemented |
-| KPI indicators | `outp` | planned |
-
----
-
 ## Installation
 
 ```bash
@@ -1282,4 +1265,90 @@ result = calculate_emissions(
     ),
 )
 LinkEmission.to_file(result, "link_emissions.csv")
+```
+
+---
+
+### calculate-kpis
+
+Aggregates the outputs of all preceding modules into a flat indicator table.
+This is the final step in the pipeline — it reads from files produced by
+`assign-network` and `calculate-emissions`, plus any available trip files, and
+writes `kpis.csv` with one row per indicator value.
+
+Each row has four fields: `indicator` (what is being measured), `dimension`
+(the breakdown — vehicle type, pollutant, trip type, or `total`), `value`, and
+`unit`. This long format keeps the output schema stable regardless of how many
+vehicle types, pollutants, or trip types are present.
+
+The three indicators computed are:
+
+**Vehicle kilometres travelled (VKT).** For each loaded link, VKT is
+$n \cdot d / 1000$ where $n$ is the trip count from `loaded_links.csv` and $d$
+is the link length in metres from `network_links`. Rows are emitted per
+`vehicle_id` and as a `total`.
+
+**Emissions.** Total grams per pollutant, summed across all links and vehicles
+from `link_emissions.csv`. One row per pollutant name.
+
+**Trip counts.** Number of rows in each available trip file (`parcel_trips.csv`,
+`freight_trips.csv`, `service_trips.csv`) plus a `total`. Trip files that are
+absent from the input directory contribute zero — not all pipelines need to be
+run together.
+
+**Canonical output — `kpis.csv`:**
+
+| field | type | description |
+|---|---|---|
+| `indicator` | `str` | `vkt`, `emissions`, or `trip_count` |
+| `dimension` | `str` | e.g. `vehicle_id=1`, `pollutant=CO2`, `type=freight`, `total` |
+| `value` | `float` | indicator value |
+| `unit` | `str` | `km`, `g`, or `trips` |
+
+**Canonical inputs:**
+
+| file | required | description |
+|---|---|---|
+| `loaded_links.csv` | yes | output of `assign-network` |
+| `network_links.gpkg` or `network_links.csv` | yes | provides `distance_m` per link |
+| `link_emissions.csv` | yes | output of `calculate-emissions` |
+| `parcel_trips.csv` | no | output of `schedule-deliveries` |
+| `freight_trips.csv` | no | output of `schedule-freight` |
+| `service_trips.csv` | no | output of `generate-service-trips` |
+
+This module has no config parameters. An optional `[kpi]` section in
+`urban-dollop.toml` is accepted but currently unused.
+
+**CLI:**
+
+```bash
+urban-dollop calculate-kpis data/
+urban-dollop calculate-kpis --outdir results/ data/
+```
+
+Reads required files and any available trip files from `data/`. Writes
+`kpis.csv` to the current directory by default.
+
+**Python API:**
+
+```python
+from urban_dollop import (
+    KPI, KPIConfig, LinkEmission, LoadedLink, NetworkLink,
+    calculate_kpis,
+)
+from urban_dollop import DeliveryTrip, FreightTrip, ServiceTrip
+
+loaded_links = LoadedLink.from_file("loaded_links.csv")
+network_links = NetworkLink.from_file("network_links.gpkg")
+link_emissions = LinkEmission.from_file("link_emissions.csv")
+
+kpis = calculate_kpis(
+    loaded_links=loaded_links,
+    network_links=network_links,
+    link_emissions=link_emissions,
+    parcel_trips=DeliveryTrip.from_file("parcel_trips.csv"),
+    freight_trips=FreightTrip.from_file("freight_trips.csv"),
+    service_trips=ServiceTrip.from_file("service_trips.csv"),
+)
+KPI.to_file(kpis, "kpis.csv")
 ```

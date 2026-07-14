@@ -2,6 +2,7 @@
 
 from urban_dollop.models import (
     Carrier,
+    KPI,
     DeliveryTrip,
     Depot,
     EmissionFactor,
@@ -51,6 +52,7 @@ from urban_dollop.firm_synthesis import FirmSynthesisConfig, synthesize_firms
 from urban_dollop.freight_demand import FreightDemandConfig, generate_freight_demand
 from urban_dollop.freight_scheduling import FreightSchedulingConfig, schedule_freight
 from urban_dollop.service_trips import ServiceTripConfig, generate_service_trips
+from urban_dollop.kpi import KPIConfig, calculate_kpis
 
 __all__ = [
     "Zone",
@@ -106,4 +108,7 @@ __all__ = [
     "ServiceTrip",
     "ServiceTripConfig",
     "generate_service_trips",
+    "KPI",
+    "KPIConfig",
+    "calculate_kpis",
 ]

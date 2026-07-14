@@ -1,4 +1,5 @@
 from urban_dollop.models.carrier import Carrier
+from urban_dollop.models.kpi import KPI
 from urban_dollop.models.firm import Firm
 from urban_dollop.models.firm_size_class import FirmSizeClass
 from urban_dollop.models.freight_mnl_param import FreightMNLParam
@@ -32,6 +33,7 @@ from urban_dollop.models.zone import Zone
 from urban_dollop.models.zone_node import ZoneNode
 
 __all__ = [
+    "KPI",
     "Zone",
     "LinearZone",
     "LogitZone",

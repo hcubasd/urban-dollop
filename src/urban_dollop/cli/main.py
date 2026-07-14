@@ -3,6 +3,7 @@ import sys
 
 from urban_dollop.cli.assign_network import run_assign_network
 from urban_dollop.cli.calculate_emissions import run_calculate_emissions
+from urban_dollop.cli.calculate_kpis import run_calculate_kpis
 from urban_dollop.cli.consolidate_microhubs import run_consolidate_microhubs
 from urban_dollop.cli.consolidate_uccs import run_consolidate_uccs
 from urban_dollop.cli.generate_demand import CLIError, run_generate_demand
@@ -192,6 +193,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_service_trips_cmd.set_defaults(
         handler=lambda args: run_generate_service_trips(args.input_dir, args.outdir)
+    )
+
+    calculate_kpis_cmd = subparsers.add_parser(
+        "calculate-kpis",
+        help="Aggregate simulation outputs into a flat KPI table.",
+    )
+    calculate_kpis_cmd.add_argument(
+        "input_dir",
+        help=(
+            "Directory containing loaded_links.csv, link_emissions.csv, and "
+            "network_links.gpkg (or .csv). Optionally also parcel_trips.csv, "
+            "freight_trips.csv, and service_trips.csv."
+        ),
+    )
+    calculate_kpis_cmd.add_argument(
+        "--outdir",
+        help="Existing output directory or a .csv file path. Defaults to kpis.csv in the current working directory.",
+    )
+    calculate_kpis_cmd.set_defaults(
+        handler=lambda args: run_calculate_kpis(args.input_dir, args.outdir)
     )
 
     return parser
