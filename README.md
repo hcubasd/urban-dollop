@@ -33,6 +33,8 @@ flowchart LR
     I --> E
     J[generate-service-trips] --> E
     E --> F[calculate-emissions]
+    F --> K[calculate-kpis]
+    E --> K
 ```
 
 The parcel consolidation steps are optional and composable — run either, both,
