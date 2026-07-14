@@ -697,74 +697,85 @@ firms = synthesize_firms(
 
 Synthesises discrete freight shipments from aggregate daily demand totals. A
 logistic segment is a commodity group — food, chemicals, building materials,
-and so on — that pools goods with similar handling and transport characteristics.
-`freight_demand.csv` gives the total tonnes per day for each segment; this
-module disaggregates that total into individual shipments with explicit sender
-and receiver zones, weights, and vehicle types.
+and so on — that pools goods with similar handling and transport
+characteristics. `freight_demand.csv` gives the total weight $B$ (tonnes per
+day, converted to kg internally) per segment. The module runs one budget-fill
+loop per segment, producing shipments one at a time until $B$ is exhausted.
+Each shipment gets an origin zone, a destination zone, a weight, and a vehicle
+type. The logistic segment is inherited from the outer loop — it is not drawn.
 
-The spatial disaggregation is driven entirely by the firm register and the
-make/use coefficients — no zone-level OD matrix is required. Make/use
-coefficients encode which employment sectors are likely producers and which are
-likely consumers of each commodity group: a food-processing sector has a high
-make share for food goods; a retail sector has a high use share. Let $e_f$ be
-the employment of firm $f$, $s_f$ its sector, $u_s$ the use share of sector
-$s$, and $m_s$ its make share. Each zone's attractiveness as a receiver and as
-a sender is the sum over its firms of employment weighted by the appropriate
-share:
+**Zone attractiveness weights.** The spatial disaggregation uses the firm
+register and make/use coefficients rather than a pre-specified OD matrix.
+Make/use coefficients encode which employment sectors produce and which consume
+goods of each commodity type: a food-processing sector has a high make share
+for food goods; a retail sector has a high use share. Let $e_f$ be the
+employment of firm $f$, $s_f$ its sector, $u_s$ the use share of sector $s$,
+and $m_s$ its make share. Each zone's receiver and sender attractiveness are
+computed once before the loop:
 
 $$\text{recv}[j] = \sum_{f \in j} e_f \cdot u_{s_f} \qquad \text{send}[i] = \sum_{f \in i} e_f \cdot m_{s_f}$$
 
-For each logistic segment the module runs a budget-fill loop. First it draws a
-receiver zone $j$ with probability proportional to $\text{recv}[j]$. Then it
-draws a sender zone $i$ with probability proportional to
-$\text{send}[i] \cdot f(c_{ij})$, where $c_{ij}$ is the generalised sourcing
-cost from that same $i$ to the already-drawn $j$, and $f$ is a logistic decay
-function that discounts distant origins (defined in **Distance-decay** below).
+**Generalised sourcing cost.** For every zone pair $(i, j)$, the generalised
+sourcing cost combines travel time $t_{ij}$ (seconds) and distance $d_{ij}$
+(metres) using cost rates $c_h$ (per hour) and $c_d$ (per km) from config:
 
-For the drawn zone pair $(i, j)$, a utility $U_{sv}$ is computed for every
-combination of size class $s$ and vehicle type $v$. $U_{sv}$ captures the
-tradeoff between transport cost and inventory cost: a larger shipment reduces
-the number of vehicle runs needed but ties up more capital in stock, and a
-higher-capacity vehicle costs more per trip but moves more per run (full
-definition in **Joint shipment-size × vehicle-type MNL** below). One $(s, v)$
-pair is then drawn with probability proportional to $\exp(U_{sv})$:
+$$c_{ij} = c_h \cdot \frac{t_{ij}}{3600} + c_d \cdot \frac{d_{ij}}{1000}$$
 
-$$P(s, v) = \frac{\exp(U_{sv})}{\displaystyle\sum_{s',v'} \exp(U_{s'v'})}$$
-
-The drawn $s$ determines the shipment weight — the fixed representative weight
-$w_s$ for that size class from `shipment_size_classes.csv`. The drawn $v$
-becomes the `vehicle_id` in the output. The loop repeats, subtracting $w_s$
-from the daily budget, until the budget is exhausted; the final shipment is
-capped at the remaining weight. Output is `shipments.csv`, consumed by
-`schedule-freight`.
-
-**Distance-decay.** Sender zones are drawn with probability proportional to
-their employment-weighted production share multiplied by a logistic decay
-function of generalised sourcing cost:
+A logistic decay function converts this cost into a weight that shrinks as
+cost grows, controlled by intercept $\alpha$ and slope $\beta$ from config
+(`distance_decay_alpha`, `distance_decay_beta`):
 
 $$f(c_{ij}) = \frac{1}{1 + \exp(\alpha + \beta \ln c_{ij})}$$
 
-where $c_{ij} = c_h \cdot t_{ij} / 3600 + c_d \cdot d_{ij} / 1000$ is the
-generalised sourcing cost from origin zone $i$ to destination zone $j$, with
-$c_h$ (cost per hour) and $c_d$ (cost per km) from config. $\alpha$ and $\beta$ are `distance_decay_alpha` and `distance_decay_beta`
-in config. High cost → low decay → lower probability of being selected as
-sender.
+**Budget-fill loop — one iteration per shipment:**
 
-**Joint shipment-size × vehicle-type MNL.** For each alternative
-$(s, v)$ — a combination of size class $s$ and vehicle type $v$ — the utility
-is
+**Step 1 — Draw destination zone $j$.** Normalize $\text{recv}$ into
+probabilities and form a CDF over the $N$ zones:
 
-$$U_{sv} = B_{TC} \cdot \left\lceil \frac{w_s}{\kappa_v} \right\rceil \cdot (c_h^v \cdot t_{ij} + c_d^v \cdot d_{ij}) + B_{IC} \cdot w_s + \text{ASC}_{v} + \text{ASC}_{s}$$
+$$p^r_j = \frac{\text{recv}[j]}{\displaystyle\sum_k \text{recv}[k]}, \qquad F^r_j = \sum_{k=1}^{j} p^r_k$$
 
-where $w_s$ is the representative weight (kg) of size class $s$ from
-`shipment_size_classes.csv`, $\kappa_v$ the capacity of vehicle $v$ from
-`freight_vehicle_params.csv`, and $c_h^v$ and $c_d^v$ its cost rates. The
-ceiling is the number of vehicle trips required to move one shipment of weight
-$w_s$.
+Draw $u_1 \sim U(0, 1)$ and set $j = \min\{k : F^r_k > u_1\}$. Zones with
+more employment in consuming sectors occupy larger slices of $[0, 1)$ and are
+drawn more often.
 
-Note that the sourcing costs in the distance-decay function ($c_h$, $c_d$ from
-config) represent generic supply-chain access costs and are intentionally
-separate from the per-vehicle cost rates used in the MNL.
+**Step 2 — Draw origin zone $i$.** Weight each zone's sender attractiveness
+by the decay to the already-drawn $j$, normalize, and form a CDF:
+
+$$p^s_i = \frac{\text{send}[i] \cdot f(c_{ij})}{\displaystyle\sum_k \text{send}[k] \cdot f(c_{kj})}, \qquad F^s_i = \sum_{k=1}^{i} p^s_k$$
+
+Draw $u_2 \sim U(0, 1)$ and set $i = \min\{k : F^s_k > u_2\}$. Only the
+column $j$ of the full decay matrix is used here — the column is cached after
+the first time $j$ is drawn.
+
+**Step 3 — Draw size class $s$ and vehicle type $v$ jointly.** Let $S$ be the
+set of size classes for this segment (each with representative weight $w_s$
+from `shipment_size_classes.csv`) and $V$ the set of vehicle types (each with
+capacity $\kappa_v$ and cost rates $c_h^v$, $c_d^v$ from
+`freight_vehicle_params.csv`). For every pair $(s, v) \in S \times V$ compute
+the MNL utility:
+
+$$U_{sv} = B_{TC} \cdot \left\lceil \frac{w_s}{\kappa_v} \right\rceil \cdot (c_h^v \cdot t_{ij} + c_d^v \cdot d_{ij}) + B_{IC} \cdot w_s + \text{ASC}_v + \text{ASC}_s$$
+
+where $\lceil w_s / \kappa_v \rceil$ is the number of vehicle trips required to
+move the shipment, $B_{TC}$ and $B_{IC}$ are cost sensitivity coefficients,
+and $\text{ASC}_v$, $\text{ASC}_s$ are alternative-specific constants — all
+from `freight_mnl_params.csv`. $B_{TC}$ and $B_{IC}$ are negative: higher
+transport cost or heavier inventory penalises utility. $\text{ASC}_v$ and
+$\text{ASC}_s$ capture residual preferences not explained by cost. Form a CDF
+over all $|S| \times |V|$ alternatives:
+
+$$P(s, v) = \frac{\exp(U_{sv})}{\displaystyle\sum_{s',v'} \exp(U_{s'v'})}, \qquad F_{sv} = \sum_{(s',v') \leq (s,v)} P(s', v')$$
+
+Draw $u_3 \sim U(0, 1)$ and pick the first $(s, v)$ where $F_{sv} > u_3$.
+
+Note that $c_h$ and $c_d$ in Step 2 are sourcing cost rates from config used
+only to weight the spatial draw. $c_h^v$ and $c_d^v$ in Step 3 are
+vehicle-specific operating cost rates from `freight_vehicle_params.csv` used
+in the MNL utility. They are separate parameters.
+
+**Step 4 — Emit shipment.** The shipment weight is $w = \min(w_s, B)$. Set
+$B \leftarrow B - w$ and record the shipment with origin $i$, destination $j$,
+vehicle $v$, weight $w$, and size class $s$. Return to Step 1 until $B \leq 0$.
 
 **Canonical output — `shipments.csv`:**
 
