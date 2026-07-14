@@ -505,9 +505,15 @@ of `.gpkg`; include `x` and `y` columns to supply centroids explicitly.
 reproducible. `departure_time_distribution` is optional; when omitted,
 `departure_hour` is absent from the output and trips are treated as
 time-invariant. When provided, it must be a 24-element array of cumulative
-hourly shares (non-decreasing, last value exactly 1.0). Each tour draws a
-departure hour from this distribution; all legs of the same tour share that
-hour, enabling hourly traffic intensity reporting downstream.
+hourly shares (non-decreasing, last value exactly 1.0): $F_h$ is the share of
+tours departing by the end of hour $h$. Each tour draws $u$ uniformly on
+$[0, 1]$ and is assigned the departure hour
+
+$$h = \min\{h \in \{0,\ldots,23\} : F_h \geq u\}$$
+
+The validator enforces $F_{23} = 1$, so the set is always non-empty. All legs
+of the same tour share the sampled hour, enabling hourly traffic intensity
+reporting downstream.
 
 **CLI:**
 
