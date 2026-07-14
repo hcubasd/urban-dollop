@@ -722,18 +722,21 @@ cost from that same $i$ to the already-drawn $j$, and $f$ is a logistic decay
 function that discounts distant origins (defined in **Distance-decay** below).
 
 For the drawn zone pair $(i, j)$, a utility $U_{sv}$ is computed for every
-combination of shipment size class $s$ and vehicle type $v$. $U_{sv}$ captures
-the tradeoff between transport cost and inventory cost: a larger shipment
-reduces the number of vehicle runs needed but ties up more capital in stock,
-and a higher-capacity vehicle costs more per trip but moves more per run (full
-definition in **Joint shipment-size × vehicle-type MNL** below). The pair
-$(s, v)$ is then drawn with probability
+combination of size class $s$ and vehicle type $v$. $U_{sv}$ captures the
+tradeoff between transport cost and inventory cost: a larger shipment reduces
+the number of vehicle runs needed but ties up more capital in stock, and a
+higher-capacity vehicle costs more per trip but moves more per run (full
+definition in **Joint shipment-size × vehicle-type MNL** below). One $(s, v)$
+pair is then drawn with probability proportional to $\exp(U_{sv})$:
 
 $$P(s, v) = \frac{\exp(U_{sv})}{\displaystyle\sum_{s',v'} \exp(U_{s'v'})}$$
 
-The loop repeats, subtracting each shipment's weight from the daily budget,
-until the budget is exhausted; the final shipment is capped at the remaining
-weight. Output is `shipments.csv`, consumed by `schedule-freight`.
+The drawn $s$ determines the shipment weight — the fixed representative weight
+$w_s$ for that size class from `shipment_size_classes.csv`. The drawn $v$
+becomes the `vehicle_id` in the output. The loop repeats, subtracting $w_s$
+from the daily budget, until the budget is exhausted; the final shipment is
+capped at the remaining weight. Output is `shipments.csv`, consumed by
+`schedule-freight`.
 
 **Distance-decay.** Sender zones are drawn with probability proportional to
 their employment-weighted production share multiplied by a logistic decay
@@ -753,11 +756,11 @@ is
 
 $$U_{sv} = B_{TC} \cdot \left\lceil \frac{w_s}{\kappa_v} \right\rceil \cdot (c_h^v \cdot t_{ij} + c_d^v \cdot d_{ij}) + B_{IC} \cdot w_s + \text{ASC}_{v} + \text{ASC}_{s}$$
 
-where $w_s$ is the representative shipment weight (kg), $\kappa_v$ the vehicle
-capacity, and $c_h^v$ and $c_d^v$ vehicle-specific cost rates from
-`freight_vehicle_params.csv`. The ceiling accounts for the number of trips
-required to move the shipment. Choice probabilities follow the standard
-softmax.
+where $w_s$ is the representative weight (kg) of size class $s$ from
+`shipment_size_classes.csv`, $\kappa_v$ the capacity of vehicle $v$ from
+`freight_vehicle_params.csv`, and $c_h^v$ and $c_d^v$ its cost rates. The
+ceiling is the number of vehicle trips required to move one shipment of weight
+$w_s$.
 
 Note that the sourcing costs in the distance-decay function ($c_h$, $c_d$ from
 config) represent generic supply-chain access costs and are intentionally
