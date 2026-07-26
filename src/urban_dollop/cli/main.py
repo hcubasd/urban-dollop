@@ -19,6 +19,14 @@ def main():
         from urban_dollop.cli.synth_demand_slopes import run
 
         run()
+    elif args[:2] == ["synth", "supply"]:
+        from urban_dollop.cli.synth_supply import run
+
+        run()
+    elif args[:2] == ["synth", "demand"]:
+        from urban_dollop.cli.synth_demand import run
+
+        run()
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
