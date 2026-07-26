@@ -14,7 +14,7 @@ def _validate_slopes(df, filename):
     for col in df.columns:
         if col == "slope":
             continue
-        if df[col].dtype != object or not df[col].apply(lambda v: isinstance(v, str)).all():
+        if not pd.api.types.is_string_dtype(df[col]):
             raise ValueError(f"{filename}: stratum column '{col}' must contain strings only")
 
 

@@ -35,6 +35,10 @@ def main():
         from urban_dollop.cli.synth_zones import run
 
         run()
+    elif args[:2] == ["synth", "agents"]:
+        from urban_dollop.cli.synth_agents import run
+
+        run()
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)

@@ -9,5 +9,5 @@ flowchart LR
     demand --> agents[agents]
     supply --> agents
     batch_sizes[batch-sizes] --> agents
-    zones[zones] --> agents
+    zones[zones] --> agents[agents]
 ```
