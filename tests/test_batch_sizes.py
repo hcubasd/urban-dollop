@@ -1,32 +1,44 @@
+from collections import defaultdict
+
 from urban_dollop.synth.batch_sizes import batch_sizes
 
 
-def test_returns_primes_and_columns():
-    full_primes, columns = batch_sizes()
-    assert isinstance(full_primes, list)
-    assert isinstance(columns, dict)
+def test_returns_list_of_dicts():
+    rows = batch_sizes()
+    assert isinstance(rows, list)
+    assert all(isinstance(r, dict) for r in rows)
 
 
-def test_each_column_sums_to_one():
-    full_primes, columns = batch_sizes()
-    for resource, probs in columns.items():
-        assert abs(sum(probs.values()) - 1.0) < 1e-10
+def test_has_required_columns():
+    rows = batch_sizes()
+    for row in rows:
+        assert "resource" in row
+        assert "batch_size" in row
+        assert "probability" in row
 
 
-def test_all_primes_present_in_each_column():
-    full_primes, columns = batch_sizes()
-    for resource, probs in columns.items():
-        assert set(probs.keys()) == set(full_primes)
+def test_probabilities_sum_to_one_per_resource():
+    by_resource = defaultdict(list)
+    for row in batch_sizes():
+        by_resource[row["resource"]].append(row["probability"])
+    for resource, probs in by_resource.items():
+        assert abs(sum(probs) - 1.0) < 1e-10
 
 
 def test_probabilities_are_non_negative():
-    full_primes, columns = batch_sizes()
-    for resource, probs in columns.items():
-        for p in probs.values():
-            assert p >= 0.0
+    for row in batch_sizes():
+        assert row["probability"] >= 0.0
+
+
+def test_batch_sizes_are_positive_integers():
+    for row in batch_sizes():
+        assert isinstance(row["batch_size"], int)
+        assert row["batch_size"] >= 1
 
 
 def test_resource_names_are_sequential():
-    _, columns = batch_sizes()
-    for i, name in enumerate(columns):
+    by_resource = defaultdict(list)
+    for row in batch_sizes():
+        by_resource[row["resource"]].append(row)
+    for i, name in enumerate(by_resource):
         assert name == f"resource_{i + 1}"
