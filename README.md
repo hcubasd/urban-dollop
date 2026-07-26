@@ -10,4 +10,6 @@ flowchart LR
     supply --> agents
     batch_sizes[batch-sizes] --> agents
     zones[zones] --> agents[agents]
+    agents --> desire_lines[desire-lines]
+    batch_sizes --> desire_lines
 ```
