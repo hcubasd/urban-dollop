@@ -1,7 +1,7 @@
 # urban-dollop
 
 ```mermaid
-flowchart TD
+flowchart LR
     demand_slopes[demand-slopes] --> demand[demand]
     demand_thresholds[demand-thresholds] --> demand
     supply_slopes[supply-slopes] --> supply[supply]
