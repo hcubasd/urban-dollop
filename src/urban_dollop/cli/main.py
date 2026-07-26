@@ -31,6 +31,10 @@ def main():
         from urban_dollop.cli.synth_batch_sizes import run
 
         run()
+    elif args[:2] == ["synth", "zones"]:
+        from urban_dollop.cli.synth_zones import run
+
+        run()
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
