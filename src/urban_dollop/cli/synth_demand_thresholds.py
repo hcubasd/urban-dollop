@@ -4,5 +4,4 @@ from urban_dollop.synth.resource_thresholds import resource_thresholds
 
 
 def run():
-    headers, rows = resource_thresholds()
-    pd.DataFrame(rows, columns=["resource"] + headers).to_csv("demand_thresholds.csv", index=False)
+    pd.DataFrame(resource_thresholds()).to_csv("demand_thresholds.csv", index=False)

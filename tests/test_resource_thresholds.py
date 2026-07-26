@@ -1,35 +1,58 @@
-from urban_dollop.helpers.primes import primes
 from urban_dollop.synth.resource_thresholds import resource_thresholds
 
 
-def test_returns_headers_and_rows():
-    headers, rows = resource_thresholds()
-    assert isinstance(headers, list)
+def test_returns_list_of_rows():
+    rows = resource_thresholds()
     assert isinstance(rows, list)
     assert len(rows) >= 1
 
 
-def test_headers_are_primes():
-    headers, _ = resource_thresholds()
-    assert headers == primes(len(headers))
-
-
-def test_rows_have_resource_and_header_keys():
-    headers, rows = resource_thresholds()
+def test_rows_have_required_keys():
+    rows = resource_thresholds()
     for row in rows:
         assert "resource" in row
-        for h in headers:
-            assert h in row
+        assert "resource_level" in row
+        assert "threshold" in row
 
 
-def test_mus_are_sorted_ascending():
-    headers, rows = resource_thresholds()
+def test_last_level_per_resource_has_no_threshold():
+    rows = resource_thresholds()
+    resources = dict()
     for row in rows:
-        values = [row[h] for h in headers if row[h] is not None]
-        assert values == sorted(values)
+        resources.setdefault(row["resource"], []).append(row)
+    for levels in resources.values():
+        assert levels[-1]["threshold"] is None
 
 
-def test_resource_names_are_sequential():
-    _, rows = resource_thresholds()
-    for i, row in enumerate(rows):
-        assert row["resource"] == f"resource_{i + 1}"
+def test_all_but_last_level_have_threshold():
+    rows = resource_thresholds()
+    resources = dict()
+    for row in rows:
+        resources.setdefault(row["resource"], []).append(row)
+    for levels in resources.values():
+        for row in levels[:-1]:
+            assert row["threshold"] is not None
+
+
+def test_thresholds_are_sorted_ascending():
+    rows = resource_thresholds()
+    resources = dict()
+    for row in rows:
+        resources.setdefault(row["resource"], []).append(row)
+    for levels in resources.values():
+        mus = [row["threshold"] for row in levels if row["threshold"] is not None]
+        assert mus == sorted(mus)
+
+
+def test_resource_levels_are_sorted_subset_of_primes():
+    from urban_dollop.helpers.primes import primes
+    rows = resource_thresholds()
+    max_level = max(row["resource_level"] for row in rows)
+    full_primes = set(primes(len([r for r in rows if r["resource_level"] <= max_level])))
+    resources = dict()
+    for row in rows:
+        resources.setdefault(row["resource"], []).append(row)
+    for levels in resources.values():
+        level_vals = [row["resource_level"] for row in levels]
+        assert level_vals == sorted(level_vals)
+        assert all(v in full_primes for v in level_vals)
