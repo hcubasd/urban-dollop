@@ -16,10 +16,11 @@ def _sample_point(polygon):
 
 
 def _draw_batch(pairs):
+    total = sum(p for _, p in pairs)
     u = random.random()
     cumulative = 0.0
     for size, prob in pairs:
-        cumulative += prob
+        cumulative += prob / total
         if u <= cumulative:
             return size
     return pairs[-1][0]
