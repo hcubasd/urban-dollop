@@ -26,8 +26,6 @@ def _draw_batch(pairs):
 
 
 def agents(supply_df, demand_df, batch_sizes_df, zones_gdf):
-    import pandas as pd
-
     zone_col = [c for c in zones_gdf.columns if c != "geometry" and pd.api.types.is_string_dtype(zones_gdf[c])][0]
 
     supply_strata = [c for c in supply_df.columns if pd.api.types.is_string_dtype(supply_df[c])]
@@ -36,11 +34,15 @@ def agents(supply_df, demand_df, batch_sizes_df, zones_gdf):
     demand_resources = [c for c in demand_df.columns if pd.api.types.is_integer_dtype(demand_df[c])]
 
     all_strata = list(dict.fromkeys(supply_strata + [c for c in demand_strata if c not in supply_strata]))
-    all_resources = list(dict.fromkeys(supply_resources + [c for c in demand_resources if c not in supply_resources]))
 
     batch_dist = {}
     for resource, group in batch_sizes_df.groupby("resource"):
         batch_dist[resource] = sorted(zip(group["batch_size"].tolist(), group["probability"].tolist()))
+
+    all_resources = [
+        r for r in dict.fromkeys(supply_resources + [c for c in demand_resources if c not in supply_resources])
+        if r in batch_dist
+    ]
 
     zone_lookup = dict(zip(zones_gdf[zone_col].tolist(), zones_gdf.geometry.tolist()))
 
@@ -75,7 +77,7 @@ def agents(supply_df, demand_df, batch_sizes_df, zones_gdf):
             agent = dict(stratum_vals)
             agent["geometry"] = _sample_point(polygon)
             for r in all_resources:
-                batch = _draw_batch(batch_dist[r]) if r in batch_dist else 1
+                batch = _draw_batch(batch_dist[r])
                 s_take = min(batch, remaining[r][0])
                 d_take = min(batch, remaining[r][1])
                 agent[f"{r}_supply"] = s_take

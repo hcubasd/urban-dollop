@@ -20,13 +20,6 @@ def _validate(supply_df, demand_df, batch_sizes_df, zones_gdf):
     if zone_col not in demand_strata:
         raise ValueError(f"zones.gpkg stratum column '{zone_col}' not found in demand.csv")
 
-    supply_resources = [c for c in supply_df.columns if pd.api.types.is_integer_dtype(supply_df[c])]
-    demand_resources = [c for c in demand_df.columns if pd.api.types.is_integer_dtype(demand_df[c])]
-    batch_resources = set(batch_sizes_df["resource"].unique())
-    missing = (set(supply_resources) | set(demand_resources)) - batch_resources
-    if missing:
-        raise ValueError(f"resources missing from batch_sizes.csv: {sorted(missing)}")
-
 
 def run():
     supply_df = pd.read_csv("supply.csv")
