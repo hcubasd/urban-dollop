@@ -77,6 +77,12 @@ def test_skips_resource_not_in_batch_sizes():
     assert len(gdf) == 0
 
 
+def test_no_degenerate_lines():
+    gdf = desire_lines(AGENTS, BATCH_SIZES)
+    for geom in gdf.geometry:
+        assert geom.length > 0
+
+
 def test_empty_when_no_matching_resources():
     agents = gpd.GeoDataFrame(columns=["parcels_supply", "parcels_demand", "geometry"], crs=None)
     gdf = desire_lines(agents, BATCH_SIZES)

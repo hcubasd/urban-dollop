@@ -67,7 +67,12 @@ def desire_lines(agents_gdf, batch_sizes_df):
             s_idx = _weighted_choice(supply_weights)
             s_point = supply_points[s_idx]
 
-            decay = [w * logistic(-s_point.distance(d)) for w, d in zip(demand_weights_base, demand_points)]
+            decay = [
+                0.0 if d.equals(s_point) else w * logistic(-s_point.distance(d))
+                for w, d in zip(demand_weights_base, demand_points)
+            ]
+            if sum(decay) == 0.0:
+                break
             d_idx = _weighted_choice(decay)
             d_point = demand_points[d_idx]
 
