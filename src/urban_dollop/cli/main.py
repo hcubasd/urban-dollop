@@ -43,6 +43,10 @@ def main():
         from urban_dollop.cli.synth_desire_lines import run
 
         run()
+    elif args[:2] == ["synth", "network"]:
+        from urban_dollop.cli.synth_network import run
+
+        run()
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
