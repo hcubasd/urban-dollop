@@ -34,7 +34,8 @@ def agents(supply_df, demand_df, batch_sizes_df, zones_gdf):
     supply_resources = [c for c in supply_df.columns if pd.api.types.is_integer_dtype(supply_df[c])]
     demand_resources = [c for c in demand_df.columns if pd.api.types.is_integer_dtype(demand_df[c])]
 
-    all_strata = list(dict.fromkeys(supply_strata + [c for c in demand_strata if c not in supply_strata]))
+    shared_strata = [c for c in supply_strata if c in demand_strata]
+    all_strata = shared_strata
 
     batch_dist = {}
     for resource, group in batch_sizes_df.groupby("resource"):
@@ -48,9 +49,12 @@ def agents(supply_df, demand_df, batch_sizes_df, zones_gdf):
     zone_lookup = dict(zip(zones_gdf[zone_col].tolist(), zones_gdf.geometry.tolist()))
 
     supply_work = supply_df.rename(columns={r: f"{r}_supply" for r in supply_resources})
+    supply_work = supply_work.groupby(shared_strata)[[f"{r}_supply" for r in supply_resources if f"{r}_supply" in supply_work.columns]].sum().reset_index()
+
     demand_work = demand_df.rename(columns={r: f"{r}_demand" for r in demand_resources})
-    merge_on = [c for c in supply_strata if c in demand_strata]
-    merged = supply_work.merge(demand_work, on=merge_on, how="outer")
+    demand_work = demand_work.groupby(shared_strata)[[f"{r}_demand" for r in demand_resources if f"{r}_demand" in demand_work.columns]].sum().reset_index()
+
+    merged = supply_work.merge(demand_work, on=shared_strata, how="outer")
 
     for r in all_resources:
         for suffix in ("_supply", "_demand"):

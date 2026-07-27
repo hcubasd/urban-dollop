@@ -84,6 +84,31 @@ def test_supply_only_resource():
     assert gdf["grain_supply"].sum() == 6
 
 
+def test_extra_supply_strata_collapsed():
+    supply = pd.DataFrame([
+        {"zone": "A", "city": "X", "parcels": 4},
+        {"zone": "A", "city": "Y", "parcels": 3},
+        {"zone": "B", "city": "X", "parcels": 2},
+        {"zone": "B", "city": "Y", "parcels": 1},
+    ])
+    demand = pd.DataFrame([
+        {"zone": "A", "parcels": 3},
+        {"zone": "B", "parcels": 3},
+    ])
+    zones = gpd.GeoDataFrame(
+        {"zone": ["A", "B"]},
+        geometry=[
+            Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+            Polygon([(1, 0), (2, 0), (2, 1), (1, 1)]),
+        ],
+        crs=None,
+    )
+    gdf = agents(supply, demand, BATCH_SIZES, zones)
+    assert "city" not in gdf.columns
+    assert gdf[gdf["zone"] == "A"]["parcels_supply"].sum() == 7
+    assert gdf[gdf["zone"] == "B"]["parcels_supply"].sum() == 3
+
+
 def test_empty_when_no_zone_intersection():
     zones = gpd.GeoDataFrame(
         {"zone": ["Z"]},
