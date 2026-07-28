@@ -30,18 +30,21 @@ def test_probabilities_are_non_negative():
         assert row["probability"] >= 0.0
 
 
-def test_time_intervals_are_positive_integers():
+def test_time_intervals_are_strings():
     for row in departures():
-        assert isinstance(row["time_interval"], int)
-        assert row["time_interval"] >= 1
+        assert isinstance(row["time_interval"], str)
+        assert row["time_interval"].startswith("interval_")
 
 
 def test_intervals_are_subset_of_largest_set():
     by_resource = defaultdict(list)
     for row in departures():
         by_resource[row["resource"]].append(row["time_interval"])
-    max_interval = max(max(intervals) for intervals in by_resource.values())
-    full_set = set(range(1, max_interval + 1))
+    all_intervals = set()
+    for intervals in by_resource.values():
+        all_intervals.update(intervals)
+    max_idx = max(int(s.split("_")[1]) for s in all_intervals)
+    full_set = {f"interval_{j + 1}" for j in range(max_idx)}
     for intervals in by_resource.values():
         assert set(intervals).issubset(full_set)
 

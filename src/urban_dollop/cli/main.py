@@ -55,6 +55,30 @@ def main():
         from urban_dollop.cli.synth_trip_returns import run
 
         run()
+    elif args[:2] == ["synth", "alternative-specific-constants"]:
+        from urban_dollop.cli.synth_alternative_specific_constants import run
+
+        run()
+    elif args[:2] == ["synth", "vehicle-velocities"]:
+        from urban_dollop.cli.synth_vehicle_velocities import run
+
+        run()
+    elif args[:2] == ["synth", "vehicle-capacities"]:
+        from urban_dollop.cli.synth_vehicle_capacities import run
+
+        run()
+    elif args[:2] == ["synth", "road-capacities"]:
+        from urban_dollop.cli.synth_road_capacities import run
+
+        run()
+    elif args[:2] == ["synth", "vehicles"]:
+        from urban_dollop.cli.synth_vehicles import run
+
+        run()
+    elif args[:2] == ["synth", "time-intervals"]:
+        from urban_dollop.cli.synth_time_intervals import run
+
+        run()
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)

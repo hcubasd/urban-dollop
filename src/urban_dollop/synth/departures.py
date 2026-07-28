@@ -12,7 +12,7 @@ def departures():
     n_resources = math.ceil(log_normal(t(3)))
     interval_counts = [prime(math.ceil(log_normal(normal_sample(0.0, 1.0)))) for _ in range(n_resources)]
     max_intervals = max(interval_counts)
-    full_intervals = list(range(1, max_intervals + 1))
+    full_intervals = [f"interval_{j + 1}" for j in range(max_intervals)]
 
     rows = []
     for i, n_intervals in enumerate(interval_counts):
