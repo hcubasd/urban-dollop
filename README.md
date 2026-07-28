@@ -2,18 +2,18 @@
 
 ```mermaid
 flowchart LR
+    batch_sizes[batch-sizes] --> agents
+    zones[zones] --> agents
     demand_slopes[demand-slopes] --> demand[demand]
     demand_thresholds[demand-thresholds] --> demand
     supply_slopes[supply-slopes] --> supply[supply]
     supply_thresholds[supply-thresholds] --> supply
     demand --> agents[agents]
     supply --> agents
-    batch_sizes[batch-sizes] --> agents
-    zones[zones] --> agents
     agents --> desire_lines[desire-lines]
     batch_sizes --> desire_lines
-    network[network] --> network_loads[network-loads]
     desire_lines --> network_loads
+    network[network] --> network_loads[network-loads]
     departures[departures] --> network_loads
     time_intervals[time-intervals] --> network_loads
     trip_returns[trip-returns] --> network_loads
