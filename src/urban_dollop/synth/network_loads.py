@@ -92,6 +92,8 @@ def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_d
                   dwell_times_df, vehicles_df, vehicle_velocities_df,
                   vehicle_capacities_df, road_capacities_df, asc_df):
 
+    network_gdf = network_gdf.set_index("link_id")
+
     vehicles_list = vehicles_df.to_dict("records")
     vehicle_map = {r["vehicle"]: r for r in vehicles_list}
 

@@ -10,6 +10,7 @@ def test_returns_geodataframe():
 
 def test_has_required_columns():
     gdf = network()
+    assert "link_id" in gdf.columns
     assert "grade" in gdf.columns
     assert "road_type" in gdf.columns
     assert "direction" in gdf.columns
@@ -44,6 +45,11 @@ def test_grade_is_float():
     gdf = network()
     for g in gdf["grade"]:
         assert isinstance(g, float)
+
+
+def test_link_ids_are_unique():
+    gdf = network()
+    assert gdf["link_id"].nunique() == len(gdf)
 
 
 def test_crs_is_none():

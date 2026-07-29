@@ -8,11 +8,11 @@ from urban_dollop.synth.network_loads import network_loads
 def _make_inputs():
     network_gdf = gpd.GeoDataFrame(
         [
-            {"grade": 0.0, "road_type": "road_type_1", "direction": "both",
+            {"link_id": 0, "grade": 0.0, "road_type": "road_type_1", "direction": "both",
              "geometry": LineString([(0.0, 0.0), (1.0, 0.0)])},
-            {"grade": 0.1, "road_type": "road_type_1", "direction": "both",
+            {"link_id": 1, "grade": 0.1, "road_type": "road_type_1", "direction": "both",
              "geometry": LineString([(1.0, 0.0), (1.0, 1.0)])},
-            {"grade": -0.1, "road_type": "road_type_1", "direction": "both",
+            {"link_id": 2, "grade": -0.1, "road_type": "road_type_1", "direction": "both",
              "geometry": LineString([(0.0, 0.0), (1.0, 1.0)])},
         ],
         crs=None,

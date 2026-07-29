@@ -29,9 +29,10 @@ def network():
             edges.add((min(a, b), max(a, b)))
 
     rows = []
-    for a, b in edges:
+    for i, (a, b) in enumerate(edges):
         p1, p2 = points[a], points[b]
         rows.append({
+            "link_id": i,
             "grade": normal_sample(0.0, 1.0),
             "road_type": random.choice(road_types),
             "direction": random.choice(directions),
