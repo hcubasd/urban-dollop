@@ -48,7 +48,7 @@ def _build_graph(network_gdf, vehicle_rows, velocities, road_capacities, link_lo
         link_lengths = {}
         for link_id, a, b, length, road_type, grade, direction, v_over_c in edges:
             vel = velocities.get((vehicle, road_type), 1.0)
-            eff_vel = vel * math.exp(-grade)
+            eff_vel = vel * math.exp(-grade / 100.0)
             if eff_vel <= 0:
                 eff_vel = 1e-9
             t0 = length / eff_vel / interval_duration
@@ -317,7 +317,7 @@ def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_d
                 cap = road_cap_map.get(road_type, 1.0)
                 pcu_load = link_pcu_loads.get(link_id, 0.0)
                 vel = velocities.get((vehicle, road_type), 1.0)
-                eff_vel = vel * math.exp(-grade)
+                eff_vel = vel * math.exp(-grade / 100.0)
                 if eff_vel <= 0:
                     eff_vel = 1e-9
                 t0 = length / eff_vel

@@ -33,7 +33,7 @@ def network():
         p1, p2 = points[a], points[b]
         rows.append({
             "link_id": i,
-            "grade": normal_sample(0.0, 1.0),
+            "grade": random.triangular(-6.0, 6.0, 0.0),
             "road_type": random.choice(road_types),
             "direction": random.choice(directions),
             "geometry": LineString([(float(p1[0]), float(p1[1])), (float(p2[0]), float(p2[1]))]),

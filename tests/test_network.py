@@ -47,6 +47,12 @@ def test_grade_is_float():
         assert isinstance(g, float)
 
 
+def test_grade_within_bounds():
+    gdf = network()
+    for g in gdf["grade"]:
+        assert -6.0 <= g <= 6.0
+
+
 def test_link_ids_are_unique():
     gdf = network()
     assert gdf["link_id"].nunique() == len(gdf)
