@@ -51,8 +51,8 @@ def main():
         from urban_dollop.cli.synth_departures import run
 
         run()
-    elif args[:2] == ["synth", "trip-returns"]:
-        from urban_dollop.cli.synth_trip_returns import run
+    elif args[:2] == ["synth", "dwell-times"]:
+        from urban_dollop.cli.synth_dwell_times import run
 
         run()
     elif args[:2] == ["synth", "alternative-specific-constants"]:
@@ -77,6 +77,10 @@ def main():
         run()
     elif args[:2] == ["synth", "time-intervals"]:
         from urban_dollop.cli.synth_time_intervals import run
+
+        run()
+    elif args[:2] == ["synth", "network-loads"]:
+        from urban_dollop.cli.synth_network_loads import run
 
         run()
     else:

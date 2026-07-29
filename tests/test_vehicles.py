@@ -15,6 +15,7 @@ def test_has_required_columns():
         assert "bpr_beta" in row
         assert "time_cost" in row
         assert "distance_cost" in row
+        assert "pcu" in row
 
 
 def test_vehicle_names_sequential():
@@ -37,6 +38,11 @@ def test_vehicle_type_is_string():
     for row in vehicles():
         assert isinstance(row["vehicle_type"], str)
         assert row["vehicle_type"].startswith("vehicle_type_")
+
+
+def test_pcu_is_positive():
+    for row in vehicles():
+        assert row["pcu"] > 0.0
 
 
 def test_no_duplicate_vehicles():

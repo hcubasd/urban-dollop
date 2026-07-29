@@ -16,7 +16,7 @@ flowchart LR
     network[network] --> network_loads[network-loads]
     departures[departures] --> network_loads
     time_intervals[time-intervals] --> network_loads
-    trip_returns[trip-returns] --> network_loads
+    dwell_times[dwell-times] --> network_loads
     vehicles[vehicles] --> network_loads
     vehicle_velocities[vehicle-velocities] --> network_loads
     vehicle_capacities[vehicle-capacities] --> network_loads

@@ -19,5 +19,6 @@ def vehicles():
             "bpr_beta": log_normal(normal_sample(0.0, 1.0)),
             "time_cost": normal_sample(0.0, 1.0),
             "distance_cost": normal_sample(0.0, 1.0),
+            "pcu": log_normal(normal_sample(0.0, 1.0)),
         })
     return rows

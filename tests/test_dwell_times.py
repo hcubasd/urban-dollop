@@ -1,14 +1,14 @@
-from urban_dollop.synth.trip_returns import trip_returns
+from urban_dollop.synth.dwell_times import dwell_times
 
 
 def test_returns_list_of_dicts():
-    rows = trip_returns()
+    rows = dwell_times()
     assert isinstance(rows, list)
     assert all(isinstance(r, dict) for r in rows)
 
 
 def test_has_required_columns():
-    rows = trip_returns()
+    rows = dwell_times()
     for row in rows:
         assert "resource" in row
         assert "dwell_time" in row
@@ -16,23 +16,23 @@ def test_has_required_columns():
 
 
 def test_resource_names_are_sequential():
-    rows = trip_returns()
+    rows = dwell_times()
     for i, row in enumerate(rows):
         assert row["resource"] == f"resource_{i + 1}"
 
 
-def test_dwell_time_is_positive_integer():
-    for row in trip_returns():
-        assert isinstance(row["dwell_time"], int)
-        assert row["dwell_time"] >= 1
+def test_dwell_time_is_positive_float():
+    for row in dwell_times():
+        assert isinstance(row["dwell_time"], float)
+        assert row["dwell_time"] > 0.0
 
 
 def test_load_pct_in_unit_interval():
-    for row in trip_returns():
+    for row in dwell_times():
         assert 0.0 <= row["load_pct"] < 1.0
 
 
 def test_one_row_per_resource():
-    rows = trip_returns()
+    rows = dwell_times()
     resources = [r["resource"] for r in rows]
     assert len(resources) == len(set(resources))
