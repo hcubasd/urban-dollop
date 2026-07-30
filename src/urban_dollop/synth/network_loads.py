@@ -361,15 +361,18 @@ def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_d
 
             dwell_time, ret_load_pct = dwell_map.get(trip["resource"], (0.0, 0.0))
             arrival_time = current_time
-            return_depart_interval_idx = None
-            acc = 0.0
-            for fut_interval in intervals:
-                acc += durations[fut_interval]
-                if cumulative_time + acc >= arrival_time + dwell_time:
-                    return_depart_interval_idx = fut_interval
+            current_idx = intervals.index(interval)
+            fut_cumulative = cumulative_time
+            return_departure_time = None
+            for i, fut_interval in enumerate(intervals[current_idx:]):
+                fut_cumulative += durations[fut_interval]
+                if fut_cumulative >= arrival_time + dwell_time:
+                    next_idx = current_idx + i + 1
+                    if next_idx < len(intervals):
+                        return_departure_time = fut_cumulative
                     break
 
-            if return_depart_interval_idx is not None:
+            if return_departure_time is not None:
                 o_node = trip["d_node"]
                 d_node = trip["o_node"]
                 if o_node != d_node:
@@ -396,7 +399,7 @@ def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_d
                             "dest": trip["origin"],
                             "o_node": o_node,
                             "d_node": d_node,
-                            "departure_time": cumulative_time + acc - durations[return_depart_interval_idx],
+                            "departure_time": return_departure_time,
                         })
 
         for (link_id, intv), vehicle_data in link_contributions.items():
