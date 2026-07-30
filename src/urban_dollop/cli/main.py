@@ -87,6 +87,10 @@ def main():
         from urban_dollop.cli.synth_copert_v_coefficients import run
 
         run()
+    elif args[:2] == ["synth", "emission-factors"]:
+        from urban_dollop.cli.synth_emission_factors import run
+
+        run()
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
