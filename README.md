@@ -22,4 +22,9 @@ flowchart LR
     vehicle_capacities[vehicle-capacities] --> network_loads
     road_capacities[road-capacities] --> network_loads
     alternative_specific_constants[alternative-specific-constants] --> network_loads
+    network_loads[network-loads] --> network_emissions[network-emissions]
+    network --> network_emissions
+    vehicles --> network_emissions
+    copert_v_coefficients[copert-v-coefficients] --> network_emissions
+    emission_factors[emission-factors] --> network_emissions
 ```
