@@ -23,14 +23,16 @@ def _build_graph(network_gdf, vehicle_rows, velocities, road_capacities, link_lo
     edges = []
     for link_id, row in network_gdf.iterrows():
         geom = row.geometry
+        road_type = row["road_type"]
+        if road_type not in road_capacities:
+            continue
         c = list(geom.coords)
         a = node_id(c[0])
         b = node_id(c[-1])
         length = geom.length
-        road_type = row["road_type"]
         grade = row["grade"]
         direction = row["direction"]
-        cap = road_capacities.get(road_type, 1.0)
+        cap = road_capacities[road_type]
         pcu_load = link_loads.get(link_id, 0.0)
         v_over_c = pcu_load / cap if cap > 0 else 0.0
         edges.append((link_id, a, b, length, road_type, grade, direction, v_over_c))
@@ -47,7 +49,9 @@ def _build_graph(network_gdf, vehicle_rows, velocities, road_capacities, link_lo
         link_times = {}
         link_lengths = {}
         for link_id, a, b, length, road_type, grade, direction, v_over_c in edges:
-            vel = velocities.get((vehicle, road_type), 1.0)
+            vel = velocities.get((vehicle, road_type))
+            if vel is None:
+                continue
             eff_vel = vel * math.exp(-grade / 100.0)
             if eff_vel <= 0:
                 eff_vel = 1e-9
@@ -118,10 +122,17 @@ def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_d
 
     intervals = time_intervals_df["time_interval"].tolist()
     durations = {r["time_interval"]: r["duration"] for _, r in time_intervals_df.iterrows()}
+    interval_set = set(intervals)
 
     dep_map = {}
     for _, r in departures_df.iterrows():
+        if r["time_interval"] not in interval_set:
+            continue
         dep_map.setdefault(r["resource"], {})[r["time_interval"]] = r["probability"]
+    for resource, probs in dep_map.items():
+        total = sum(probs.values())
+        if total > 0:
+            dep_map[resource] = {k: v / total for k, v in probs.items()}
 
     resource_cols_supply = [c for c in desire_lines_gdf.columns
                             if c.endswith("_supply") and pd.api.types.is_numeric_dtype(desire_lines_gdf[c])]
@@ -229,7 +240,9 @@ def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_d
                     cap = cap_map.get((vehicle, resource), None)
                     if cap is None:
                         continue
-                    asc = asc_map.get((vehicle, resource), 0.0)
+                    asc = asc_map.get((vehicle, resource))
+                    if asc is None:
+                        continue
                     time_cost = v_row["time_cost"]
                     dist_cost = v_row["distance_cost"]
 

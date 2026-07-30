@@ -82,22 +82,6 @@ def run():
             print(f"time_intervals.csv missing column: {col}", file=sys.stderr)
             sys.exit(1)
 
-    dep_intervals = set(departures_df["time_interval"].unique())
-    ti_intervals = list(time_intervals_df["time_interval"])
-    ti_set = set(ti_intervals)
-    if not dep_intervals.issubset(ti_set):
-        missing = dep_intervals - ti_set
-        print(f"departures.csv references intervals not in time_intervals.csv: {missing}", file=sys.stderr)
-        sys.exit(1)
-
-    dep_by_resource = departures_df.groupby("resource")["time_interval"].apply(list)
-    for resource, intv_list in dep_by_resource.items():
-        intv_order = [ti_intervals.index(i) for i in intv_list]
-        if intv_order != sorted(intv_order):
-            print(f"departures.csv intervals for resource {resource} are not in time_intervals.csv order",
-                  file=sys.stderr)
-            sys.exit(1)
-
     rows = network_loads(
         network_gdf, desire_lines_gdf, departures_df, time_intervals_df,
         dwell_times_df, vehicles_df, vehicle_velocities_df,
