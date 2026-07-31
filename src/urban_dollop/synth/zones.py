@@ -42,5 +42,5 @@ def zones():
         point_region = vor.point_region[i]
         geom = _clip_voronoi_cell(vor, point_region, bounds)
         geometries.append(geom)
-    labels = [f"value_{i + 1}" for i in range(n_zones)]
-    return gpd.GeoDataFrame({"stratum_1": labels, "geometry": geometries}, crs=None)
+    labels = [f"zone_{i + 1}" for i in range(n_zones)]
+    return gpd.GeoDataFrame({"zone_id": labels, "geometry": geometries}, crs=None)

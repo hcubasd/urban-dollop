@@ -44,7 +44,20 @@ def test_rows_are_full_cross_product(rows):
     assert len(rows) == expected
 
 
-def test_stratum_columns_are_sequential(rows):
+def test_zone_id_is_first_column(rows):
     dims = [k for k in rows[0] if k != "slope"]
-    for i, d in enumerate(dims):
+    assert dims[0] == "zone_id"
+    for i, d in enumerate(dims[1:]):
         assert d == f"stratum_{i + 1}"
+
+
+def test_zone_id_values_use_zone_prefix(rows):
+    for row in rows:
+        assert row["zone_id"].startswith("zone_")
+
+
+def test_non_zone_stratum_values_use_value_prefix(rows):
+    dims = [k for k in rows[0] if k != "slope" and k != "zone_id"]
+    for row in rows:
+        for d in dims:
+            assert row[d].startswith("value_")

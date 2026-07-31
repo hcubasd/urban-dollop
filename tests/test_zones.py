@@ -13,16 +13,16 @@ def test_returns_geodataframe():
     assert isinstance(gdf, gpd.GeoDataFrame)
 
 
-def test_has_stratum_and_geometry_columns():
+def test_has_zone_id_and_geometry_columns():
     gdf = zones()
-    assert "stratum_1" in gdf.columns
+    assert "zone_id" in gdf.columns
     assert "geometry" in gdf.columns
 
 
-def test_stratum_values_are_sequential():
+def test_zone_id_values_are_sequential():
     gdf = zones()
     n = len(gdf)
-    assert list(gdf["stratum_1"]) == [f"value_{i + 1}" for i in range(n)]
+    assert list(gdf["zone_id"]) == [f"zone_{i + 1}" for i in range(n)]
 
 
 def test_all_geometries_are_valid_polygons():

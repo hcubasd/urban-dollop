@@ -8,12 +8,15 @@ from urban_dollop.helpers.student import t
 
 
 def stratum_slopes():
-    n_dims = math.ceil(log_normal(t(3)))
+    n_dims = min(math.ceil(log_normal(t(3))), 4)
     dim_values = [
-        [f"value_{j + 1}" for j in range(prime(math.ceil(log_normal(normal_sample(0.0, 1.0)))))]
-        for _ in range(n_dims)
+        [f"zone_{j + 1}" for j in range(min(prime(math.ceil(log_normal(normal_sample(0.0, 1.0)))), 7))],
+        *[
+            [f"value_{j + 1}" for j in range(min(prime(math.ceil(log_normal(normal_sample(0.0, 1.0)))), 7))]
+            for _ in range(n_dims - 1)
+        ],
     ]
-    dim_names = [f"stratum_{i + 1}" for i in range(n_dims)]
+    dim_names = ["zone_id"] + [f"stratum_{i + 1}" for i in range(n_dims - 1)]
 
     rows = []
     for combo in itertools.product(*dim_values):
