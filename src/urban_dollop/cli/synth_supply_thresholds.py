@@ -1,7 +1,8 @@
 import pandas as pd
 
-from urban_dollop.synth.resource_thresholds import resource_thresholds
+from urban_dollop.synth.thresholds import random_resources, thresholds
 
 
-def run():
-    pd.DataFrame(resource_thresholds()).to_csv("supply_thresholds.csv", index=False)
+def run(sigma=1.0):
+    resources = random_resources(sigma)
+    pd.DataFrame(thresholds(resources)).to_csv("supply_thresholds.csv", index=False)
