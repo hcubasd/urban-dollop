@@ -1,12 +1,13 @@
-import pandas as pd
+import sys
 
-from urban_dollop.synth.thresholds import random_resources, thresholds
+from urban_dollop.cli._io import read_thresholds, write_rows
+from urban_dollop.synth.demand_thresholds import demand_thresholds
 
 
 def run(sigma=1.0):
-    # Thresholds never borrows from a sibling -- supply and demand resource
-    # sets are allowed to differ freely (excess supply or unmet demand is a
-    # legitimate outcome, not an error), and reconciling them is deferred to
-    # agent synthesis, later in the pipeline.
-    resources = random_resources(sigma)
-    pd.DataFrame(thresholds(resources)).to_csv("demand_thresholds.csv", index=False)
+    try:
+        rows = read_thresholds("demand_thresholds.csv")
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+    write_rows(demand_thresholds(rows, sigma), "demand_thresholds.csv")
