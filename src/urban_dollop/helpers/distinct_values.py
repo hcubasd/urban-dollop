@@ -1,10 +1,11 @@
-from urban_dollop.helpers.random_count import random_count
+from urban_dollop.helpers.random_level import random_level
 
 
 def distinct_values(n, sigma):
-    """n distinct positive integers, sorted, each candidate drawn the same
-    way random_count draws a count (ceil(lognormal(0, sigma))). Unlike a
-    terminal output value (effect, threshold), this plays stratum_value's
+    """n distinct non-negative integers, sorted, each candidate drawn via
+    random_level (ceil(lognormal(0, sigma)) - 1, zero-inclusive -- a
+    resource_level can legitimately be zero, unlike a plain count). Unlike
+    a terminal output value (effect, threshold), this plays stratum_value's
     shape-defining role -- it just has real random content instead of a
     deterministic label -- so it uses the same sigma that determined n,
     rather than a fixed one: as n grows (itself driven by sigma), the value
@@ -16,5 +17,5 @@ def distinct_values(n, sigma):
     """
     values = set()
     while len(values) < n:
-        values.add(random_count(sigma))
+        values.add(random_level(sigma))
     return sorted(values)

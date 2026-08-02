@@ -9,4 +9,13 @@ def test_returns_n_distinct_sorted_values():
 
 
 def test_single_value_at_zero_sigma_is_deterministic():
-    assert distinct_values(1, sigma=0.0) == [1]
+    assert distinct_values(1, sigma=0.0) == [0]
+
+
+def test_zero_is_a_reachable_value():
+    saw_zero = False
+    for _ in range(50):
+        if 0 in distinct_values(3, sigma=1.0):
+            saw_zero = True
+            break
+    assert saw_zero

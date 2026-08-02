@@ -6,6 +6,7 @@ def test_zero_sigma_is_deterministic_minimal_count():
     resources = {r["resource"] for r in rows}
     assert len(resources) == 1
     assert len(rows) == 1
+    assert rows[0]["resource_level"] == 0
 
 
 def test_threshold_always_none():

@@ -112,7 +112,7 @@ outcomes.
 
 | resource | resource_level | threshold |
 |---|---|---|
-| resource_1 | 1 | 0.432 |
+| resource_1 | 0 | 0.432 |
 | resource_1 | 2 | 1.738 |
 | resource_1 | 3 | (empty) |
 | resource_2 | 4 | -0.220 |
@@ -132,11 +132,14 @@ in a resource has no upper threshold, hence empty.
 
 Every `threshold` is `Normal(0, 1)`, sorted ascending per resource, fixed regardless of
 `--sigma` -- a value, not a count, same reasoning as `effect` above. Resource *count* and
-*level count per resource* are both `ceil(lognormal(0, sigma))`, uncapped. Level *values*
-are drawn from the same `--sigma` as the count that determined how many are needed, repeated
-until the required number of levels is distinct within that resource -- `resource_level`
-plays the same shape-defining role `stratum_value` plays for effects, even though it's
-numeric.
+*level count per resource* are both `ceil(lognormal(0, sigma))`, uncapped -- genuine counts,
+never zero. Level *values* are different: drawn from the same `--sigma` as the count that
+determined how many are needed, repeated until the required number of levels is distinct
+within that resource, but shifted down by one (`ceil(lognormal(0, sigma)) - 1`) so `0` is
+reachable -- unlike a count of things to synthesize, a resource level legitimately starts at
+zero (the "none of this resource" outcome), and needs a real threshold between zero and
+whatever level comes next. `resource_level` plays the same shape-defining role
+`stratum_value` plays for effects, even though it's numeric.
 
 Same self-contained contract as the effects commands: nothing on disk synthesizes shape and
 values together; a file with `resource`/`resource_level` filled in and `threshold` entirely
