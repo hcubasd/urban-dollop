@@ -7,4 +7,4 @@ def random_count(sigma=1.0):
     Always >= 1, since lognormal support is strictly positive. The one place
     --sigma acts -- this is for counts, never for the values a count
     determines the quantity of."""
-    return math.ceil(math.exp(random.normalvariate(0.0, sigma)))
+    return math.ceil(random.lognormvariate(0.0, sigma))
