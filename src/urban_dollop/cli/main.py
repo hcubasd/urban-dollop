@@ -4,8 +4,12 @@ import sys
 def _parse_sigma(args):
     """Pull --sigma <float> out of args, wherever it appears. Defaults to
     1.0 -- the standard deviation fed to every count-sizing draw in a synth
-    command (the values themselves stay fixed regardless)."""
+    command (the values themselves stay fixed regardless). Also reports
+    whether --sigma was actually typed, since a command whose target file
+    already exists needs to distinguish "defaulted, fine" from "explicitly
+    passed something that has nothing left to control"."""
     sigma = 1.0
+    sigma_given = False
     remaining = []
     i = 0
     while i < len(args):
@@ -21,49 +25,50 @@ def _parse_sigma(args):
             if sigma < 0:
                 print(f"--sigma must be >= 0, got {sigma}", file=sys.stderr)
                 sys.exit(1)
+            sigma_given = True
             i += 2
         else:
             remaining.append(args[i])
             i += 1
-    return sigma, remaining
+    return sigma, sigma_given, remaining
 
 
 def main():
-    sigma, args = _parse_sigma(sys.argv[1:])
+    sigma, sigma_given, args = _parse_sigma(sys.argv[1:])
     command = args[:2]
 
     if command == ["synth", "supply-effects"]:
         from urban_dollop.cli.synth_supply_effects import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "demand-effects"]:
         from urban_dollop.cli.synth_demand_effects import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "capacity-effects"]:
         from urban_dollop.cli.synth_capacity_effects import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "need-effects"]:
         from urban_dollop.cli.synth_need_effects import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "supply-thresholds"]:
         from urban_dollop.cli.synth_supply_thresholds import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "demand-thresholds"]:
         from urban_dollop.cli.synth_demand_thresholds import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "capacity-thresholds"]:
         from urban_dollop.cli.synth_capacity_thresholds import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     elif command == ["synth", "need-thresholds"]:
         from urban_dollop.cli.synth_need_thresholds import run
 
-        run(sigma)
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)

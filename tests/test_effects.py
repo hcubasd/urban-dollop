@@ -11,15 +11,20 @@ FUNCTIONS = [supply_effects, demand_effects, capacity_effects, need_effects]
 @pytest.mark.parametrize("effects", FUNCTIONS)
 def test_nothing_given_synthesizes_shape_and_values(effects):
     rows = effects(sigma=0.0)
-    assert rows == [{"stratum_column": "zone_id", "stratum_value": "zone_1", "effect": rows[0]["effect"]}]
+    assert rows == [{
+        "stratum": "zone_id",
+        "stratum_value": "zone_1",
+        "resource": "resource_1",
+        "effect": rows[0]["effect"],
+    }]
     assert isinstance(rows[0]["effect"], float)
 
 
 @pytest.mark.parametrize("effects", FUNCTIONS)
 def test_given_shape_only_values_get_filled(effects):
     rows = [
-        {"stratum_column": "zone_id", "stratum_value": "downtown", "effect": None},
-        {"stratum_column": "zone_id", "stratum_value": "suburb", "effect": None},
+        {"stratum": "zone_id", "stratum_value": "downtown", "resource": "parcels", "effect": None},
+        {"stratum": "zone_id", "stratum_value": "suburb", "resource": "parcels", "effect": None},
     ]
     filled = effects(rows)
     assert [r["stratum_value"] for r in filled] == ["downtown", "suburb"]
@@ -27,7 +32,7 @@ def test_given_shape_only_values_get_filled(effects):
 
 
 @pytest.mark.parametrize("effects", FUNCTIONS)
-def test_given_shape_preserved_exactly_no_extra_dims_invented(effects):
-    rows = [{"stratum_column": "zone_id", "stratum_value": "z1", "effect": None}]
+def test_given_shape_preserved_exactly_no_extra_rows_invented(effects):
+    rows = [{"stratum": "zone_id", "stratum_value": "z1", "resource": "parcels", "effect": None}]
     filled = effects(rows)
     assert len(filled) == 1
