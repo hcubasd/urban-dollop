@@ -24,10 +24,14 @@ def read_effects(path):
     CSV's homogeneous typing means a numeric zone_id sharing a file with a
     string-labeled sibling dimension round-trips as a string anyway --
     only a per-row check catches a numeric non-zone_id value in a file
-    where every dimension happens to be numeric), every resource column
-    contains floats only, and every resource column entirely empty (never
-    a mix across any resource column or row, and never "already complete"
-    -- there'd be nothing left for this command to do).
+    where every dimension happens to be numeric), and every resource
+    column contains floats only. Deliberately does NOT require resource
+    columns to be entirely empty or entirely filled: a stratum genuinely
+    may not participate in every resource (a zone that supplies grain may
+    not supply parcels at all), so a resource cell can legitimately stay
+    empty forever in an otherwise-complete file -- see
+    effects_need_synthesis for how that empty-vs-complete distinction gets
+    made.
     """
     if not os.path.exists(path):
         return None
@@ -43,13 +47,31 @@ def read_effects(path):
     for col in resource_cols:
         if not pd.api.types.is_float_dtype(df[col]):
             raise ValueError(f"{path}: resource column '{col}' must contain floats only")
-    if not df[resource_cols].isna().all().all():
-        raise ValueError(f"{path}: every resource column must be entirely empty -- this file already has a value in it")
     records = df.to_dict("records")
     for row in records:
         if row["stratum"] != "zone_id" and not isinstance(row["stratum_value"], str):
             raise ValueError(f"{path}: 'stratum_value' must be a string for stratum '{row['stratum']}' -- only zone_id may be numeric")
     return records
+
+
+def effects_need_synthesis(rows):
+    """True if `rows` is None (file absent) or every resource cell across
+    every row is empty -- both mean "nothing has been decided yet,
+    synthesize shape and/or values." False means at least one resource
+    value is already set, which now means the file is complete: any
+    resource cells still empty are permanent -- "this stratum doesn't
+    participate in this resource" -- not "pending fill." A leaf command
+    has no business inventing or overwriting that; whether to fill
+    anything further is not its call to make once any real data exists.
+    """
+    if rows is None:
+        return True
+    resource_cols = [c for c in rows[0] if c not in ("stratum", "stratum_value")]
+    return all(
+        row[col] is None or (isinstance(row[col], float) and row[col] != row[col])
+        for row in rows
+        for col in resource_cols
+    )
 
 
 def read_thresholds(path):

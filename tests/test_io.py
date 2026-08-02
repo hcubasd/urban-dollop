@@ -1,7 +1,13 @@
 import pandas as pd
 import pytest
 
-from urban_dollop.cli._io import check_sigma_relevant, read_effects, read_thresholds, write_rows
+from urban_dollop.cli._io import (
+    check_sigma_relevant,
+    effects_need_synthesis,
+    read_effects,
+    read_thresholds,
+    write_rows,
+)
 
 
 def test_read_effects_none_if_absent(tmp_path):
@@ -75,32 +81,54 @@ def test_read_effects_no_resource_columns_rejected(tmp_path):
         read_effects(str(path))
 
 
-def test_read_effects_already_filled_rejected(tmp_path):
-    path = tmp_path / "bad.csv"
+def test_read_effects_already_filled_accepted(tmp_path):
+    path = tmp_path / "ok.csv"
     pd.DataFrame([
         {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5},
     ]).to_csv(path, index=False)
-    with pytest.raises(ValueError):
-        read_effects(str(path))
+    rows = read_effects(str(path))
+    assert rows[0]["parcels"] == 0.5
 
 
-def test_read_effects_partially_filled_rejected(tmp_path):
-    path = tmp_path / "bad.csv"
+def test_read_effects_partially_filled_accepted(tmp_path):
+    path = tmp_path / "ok.csv"
     pd.DataFrame([
         {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5},
         {"stratum": "zone_id", "stratum_value": "z2", "parcels": None},
     ]).to_csv(path, index=False)
-    with pytest.raises(ValueError):
-        read_effects(str(path))
+    rows = read_effects(str(path))
+    assert rows[0]["parcels"] == 0.5
+    assert pd.isna(rows[1]["parcels"])
 
 
-def test_read_effects_one_resource_column_filled_another_empty_rejected(tmp_path):
-    path = tmp_path / "bad.csv"
+def test_read_effects_one_resource_column_filled_another_empty_accepted(tmp_path):
+    path = tmp_path / "ok.csv"
     pd.DataFrame([
         {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5, "pallets": None},
     ]).to_csv(path, index=False)
-    with pytest.raises(ValueError):
-        read_effects(str(path))
+    rows = read_effects(str(path))
+    assert rows[0]["parcels"] == 0.5
+    assert pd.isna(rows[0]["pallets"])
+
+
+def test_effects_need_synthesis_true_when_absent():
+    assert effects_need_synthesis(None) is True
+
+
+def test_effects_need_synthesis_true_when_entirely_empty():
+    rows = [
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": None, "pallets": None},
+        {"stratum": "zone_id", "stratum_value": "z2", "parcels": None, "pallets": None},
+    ]
+    assert effects_need_synthesis(rows) is True
+
+
+def test_effects_need_synthesis_false_when_any_value_set():
+    rows = [
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5, "pallets": None},
+        {"stratum": "zone_id", "stratum_value": "z2", "parcels": None, "pallets": None},
+    ]
+    assert effects_need_synthesis(rows) is False
 
 
 def test_read_thresholds_none_if_absent(tmp_path):

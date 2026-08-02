@@ -52,9 +52,13 @@ A stratum value can repeat across different strata (`value_1` could belong to bo
 the file. Each resource column is its own independent linear predictor ($\beta$), the sum
 of whichever rows apply to a given stratum combination *for that resource* -- a resource
 column indexes which independent model a cell belongs to, not a covariate on a shared one.
-Every row carries a value for every resource column, so the stratum shape (which dimensions
-exist, how many values each has) is structurally guaranteed to be shared across resources;
-only the effect values differ per resource.
+A resource cell can be empty even in an otherwise-complete file: a stratum genuinely may not
+participate in every resource's market (a zone that supplies grain may not supply parcels at
+all), so an empty cell there is a real, permanent "not applicable," not a placeholder waiting
+to be filled. Every row still carries a *column* for every resource that's tracked at all, so
+the stratum shape (which dimensions exist, how many values each has) stays structurally
+shared across resources -- it's only participation (whether a given cell has a value) that
+varies.
 
 `supply`/`demand` describe a stratum's aggregate resource totals; `capacity`/`need`
 describe the size distribution of individual agents drawn from that stratum later --
@@ -79,17 +83,19 @@ identity, so it's the one place that distinction is made. `--sigma 0` collapses 
 smallest possible draw: one dimension (`zone_id`), one value, one resource column.
 
 Alternatively, hand it a file that already has `stratum`/`stratum_value` filled in plus one
-or more resource columns (real names and values are welcome here) with every resource
-column left entirely empty, and it fills in just the values, leaving the shape untouched.
-`stratum` must contain strings; `stratum_value` must be a string for every row except
-`zone_id`'s, which may be int or string -- resource columns are identified by header name,
-not by dtype, so this isn't needed for disambiguation, it's just that only `zone_id` has a
-real-world numeric identity worth allowing. Filled resource columns must contain floats. A
-file with any resource column already set anywhere -- fully or partially, in one column or
-several -- is left alone and the command throws, rather than guessing whether you wanted it
-regenerated. Passing `--sigma` against a file that already exists throws too: `--sigma`
-only ever controls shape invention, and a file that already has shape has nothing left for
-it to control.
+or more resource columns (real names and values are welcome here). If every resource cell
+in the file is empty, it's shape-only -- the command fills every one of them, leaving the
+shape untouched. If *any* resource cell already has a value, the file is treated as
+complete and the command does nothing at all: it does not fill the remaining empty cells,
+because by that point an empty cell no longer means "not yet decided" -- it means "this
+stratum doesn't participate in this resource," and that's not a leaf command's call to make
+or overwrite once real data exists. `stratum` must contain strings; `stratum_value` must be
+a string for every row except `zone_id`'s, which may be int or string -- resource columns
+are identified by header name, not by dtype, so this isn't needed for disambiguation, it's
+just that only `zone_id` has a real-world numeric identity worth allowing. Filled resource
+cells must contain floats. Passing `--sigma` against a file that already exists throws
+either way (shape-only or complete): `--sigma` only ever controls shape invention, and a
+file that already has shape has nothing left for it to control.
 
 ## `synth supply-thresholds` / `synth demand-thresholds` / `synth capacity-thresholds` / `synth need-thresholds`
 
