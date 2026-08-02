@@ -10,7 +10,7 @@ def capacity_effects(rows=None, sigma=1.0):
     """
     if rows is None:
         rows = random_strata(sigma)
-    resource_cols = [c for c in rows[0] if c not in ("stratum", "stratum_value")]
+    resource_cols = {c for row in rows for c in row if c not in ("stratum", "stratum_value")}
     for col in resource_cols:
         rows = fill_value(rows, col)
     return rows

@@ -22,3 +22,9 @@ def test_treats_nan_as_empty():
     rows = [{"stratum_column": "zone_id", "stratum_value": "z1", "effect": float("nan")}]
     filled = fill_value(rows, "effect")
     assert filled[0]["effect"] == filled[0]["effect"]  # not NaN anymore
+
+
+def test_leaves_rows_missing_the_field_entirely_untouched():
+    rows = [{"stratum_column": "zone_id", "stratum_value": "z1"}]
+    filled = fill_value(rows, "effect")
+    assert "effect" not in filled[0]

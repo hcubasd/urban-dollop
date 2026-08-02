@@ -55,10 +55,9 @@ column indexes which independent model a cell belongs to, not a covariate on a s
 A resource cell can be empty even in an otherwise-complete file: a stratum genuinely may not
 participate in every resource's market (a zone that supplies grain may not supply parcels at
 all), so an empty cell there is a real, permanent "not applicable," not a placeholder waiting
-to be filled. Every row still carries a *column* for every resource that's tracked at all, so
-the stratum shape (which dimensions exist, how many values each has) stays structurally
-shared across resources -- it's only participation (whether a given cell has a value) that
-varies.
+to be filled. The stratum shape (which dimensions exist, how many values each has) stays
+shared across resources, but which rows actually carry a given resource's column at all is
+independent per resource -- it's participation, not shape, that varies.
 
 `supply`/`demand` describe a stratum's aggregate resource totals; `capacity`/`need`
 describe the size distribution of individual agents drawn from that stratum later --
@@ -81,6 +80,14 @@ sigma))`, uncapped, `zone_id` always included. `zone_id` values are plain intege
 is the one stratum guaranteed to exist and the one with a natural real-world numeric
 identity, so it's the one place that distinction is made. `--sigma 0` collapses this to the
 smallest possible draw: one dimension (`zone_id`), one value, one resource column.
+
+Each resource independently applies to a uniformly-random non-empty subset of the invented
+rows (size drawn uniform over `[1, n]`, membership drawn without replacement) -- never
+every row automatically, since that would silently assume every stratum participates in
+every resource's market. This is deliberately *not* controlled by `--sigma`: choosing how
+many of an already-fixed set of rows to include is a bounded selection problem, not an
+unbounded count to invent, so it doesn't fit the `ceil(lognormal(0, sigma))` pattern used
+everywhere else -- capping a lognormal draw at `n` would just pile up mass at the cap.
 
 Alternatively, hand it a file that already has `stratum`/`stratum_value` filled in plus one
 or more resource columns (real names and values are welcome here). If every resource cell

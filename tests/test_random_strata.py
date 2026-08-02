@@ -36,9 +36,16 @@ def test_resource_columns_always_none():
                 assert value is None
 
 
-def test_one_row_per_stratum_value_all_sharing_the_same_resource_columns():
+def test_one_row_per_stratum_value():
     rows = random_strata(sigma=1.5)
     strata_pairs = {(r["stratum"], r["stratum_value"]) for r in rows}
     assert len(rows) == len(strata_pairs)
-    resource_keysets = {frozenset(r) - {"stratum", "stratum_value"} for r in rows}
-    assert len(resource_keysets) == 1
+
+
+def test_each_resource_applies_to_a_nonempty_subset_of_rows():
+    rows = random_strata(sigma=1.5)
+    total_rows = len(rows)
+    resource_cols = {k for row in rows for k in row if k not in ("stratum", "stratum_value")}
+    for resource in resource_cols:
+        applicable = [row for row in rows if resource in row]
+        assert 1 <= len(applicable) <= total_rows

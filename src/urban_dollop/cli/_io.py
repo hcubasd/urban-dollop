@@ -63,12 +63,17 @@ def effects_need_synthesis(rows):
     participate in this resource" -- not "pending fill." A leaf command
     has no business inventing or overwriting that; whether to fill
     anything further is not its call to make once any real data exists.
+    Rows may be ragged (a resource key entirely absent from a row, rather
+    than present-and-None) -- a missing key is just as "empty" as an
+    explicit None, so resource columns are taken as the union across every
+    row, not just the first one, and access uses .get() rather than
+    indexing.
     """
     if rows is None:
         return True
-    resource_cols = [c for c in rows[0] if c not in ("stratum", "stratum_value")]
+    resource_cols = {k for row in rows for k in row if k not in ("stratum", "stratum_value")}
     return all(
-        row[col] is None or (isinstance(row[col], float) and row[col] != row[col])
+        row.get(col) is None or (isinstance(row.get(col), float) and row.get(col) != row.get(col))
         for row in rows
         for col in resource_cols
     )

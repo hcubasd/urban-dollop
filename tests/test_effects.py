@@ -43,3 +43,18 @@ def test_multiple_resource_columns_all_get_filled(effects):
     filled = effects(rows)
     assert isinstance(filled[0]["parcels"], float)
     assert isinstance(filled[0]["pallets"], float)
+
+
+@pytest.mark.parametrize("effects", FUNCTIONS)
+def test_pure_synthesis_fills_every_present_cell_and_can_be_sparse(effects):
+    saw_sparse = False
+    for _ in range(30):
+        rows = effects(sigma=1.5)
+        resource_cols = {c for row in rows for c in row if c not in ("stratum", "stratum_value")}
+        for row in rows:
+            for col in resource_cols:
+                if col in row:
+                    assert isinstance(row[col], float)
+            if len(row) - 2 < len(resource_cols):
+                saw_sparse = True
+    assert saw_sparse
