@@ -27,11 +27,20 @@ def test_read_effects_missing_zone_id_rejected(tmp_path):
         read_effects(str(path))
 
 
-def test_read_effects_nonstring_stratum_value_rejected(tmp_path):
-    path = tmp_path / "bad.csv"
+def test_read_effects_integer_stratum_value_accepted(tmp_path):
+    path = tmp_path / "ok.csv"
     pd.DataFrame([
         {"stratum": "zone_id", "stratum_value": 1, "parcels": None},
         {"stratum": "zone_id", "stratum_value": 2, "parcels": None},
+    ]).to_csv(path, index=False)
+    rows = read_effects(str(path))
+    assert [r["stratum_value"] for r in rows] == [1, 2]
+
+
+def test_read_effects_nonfloat_resource_column_rejected(tmp_path):
+    path = tmp_path / "bad.csv"
+    pd.DataFrame([
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": "not a float"},
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_effects(str(path))
@@ -90,6 +99,25 @@ def test_read_thresholds_valid_shape_only(tmp_path):
 def test_read_thresholds_wrong_columns_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([{"resource": "parcels", "threshold": None}]).to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        read_thresholds(str(path))
+
+
+def test_read_thresholds_nonstring_resource_rejected(tmp_path):
+    path = tmp_path / "bad.csv"
+    pd.DataFrame([
+        {"resource": 1, "resource_level": 1, "threshold": None},
+        {"resource": 2, "resource_level": 1, "threshold": None},
+    ]).to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        read_thresholds(str(path))
+
+
+def test_read_thresholds_nonint_resource_level_rejected(tmp_path):
+    path = tmp_path / "bad.csv"
+    pd.DataFrame([
+        {"resource": "parcels", "resource_level": 1.5, "threshold": None},
+    ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_thresholds(str(path))
 

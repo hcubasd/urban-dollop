@@ -12,10 +12,17 @@ def read_effects(path):
     exists, else None -- None signals full synthesis to the matching
     synth/ function. Raises ValueError if the file exists but doesn't meet
     the leaf contract: 'stratum'/'stratum_value' present plus at least one
-    resource column, zone_id present among stratum values, stratum_value
-    all strings, and every resource column entirely empty (never a mix
-    across any resource column or row, and never "already complete" --
-    there'd be nothing left for this command to do).
+    resource column, zone_id present among stratum values (which, given
+    CSV's homogeneous column typing, already guarantees 'stratum' is
+    string-typed -- no file can contain the literal string "zone_id" in a
+    column CSV would otherwise read back as numeric, so a separate dtype
+    check on 'stratum' would never independently fire), stratum_value
+    unrestricted (string or integer labels are both fine, since nothing
+    downstream disambiguates columns by dtype, only by these two reserved
+    header names), every resource column contains floats only, and every
+    resource column entirely empty (never a mix across any resource column
+    or row, and never "already complete" -- there'd be nothing left for
+    this command to do).
     """
     if not os.path.exists(path):
         return None
@@ -28,8 +35,9 @@ def read_effects(path):
         raise ValueError(f"{path}: must have at least one resource column")
     if "zone_id" not in set(df["stratum"]):
         raise ValueError(f"{path}: 'zone_id' must be present among stratum values")
-    if not pd.api.types.is_string_dtype(df["stratum_value"]):
-        raise ValueError(f"{path}: 'stratum_value' must contain strings only")
+    for col in resource_cols:
+        if not pd.api.types.is_float_dtype(df[col]):
+            raise ValueError(f"{path}: resource column '{col}' must contain floats only")
     if not df[resource_cols].isna().all().all():
         raise ValueError(f"{path}: every resource column must be entirely empty -- this file already has a value in it")
     return df.to_dict("records")
@@ -38,13 +46,20 @@ def read_effects(path):
 def read_thresholds(path):
     """rows (resource/resource_level/threshold) if `path` exists, else None.
     Raises ValueError if the file exists but doesn't meet the leaf contract:
-    exactly the required columns, and threshold entirely empty.
+    exactly the required columns, 'resource' contains strings only,
+    'resource_level' contains integers only (a resource is always counted
+    in whole units -- finer granularity means a smaller unit, not a
+    fractional level), and threshold entirely empty.
     """
     if not os.path.exists(path):
         return None
     df = pd.read_csv(path)
     if set(df.columns) != {"resource", "resource_level", "threshold"}:
         raise ValueError(f"{path}: must have exactly 'resource', 'resource_level', 'threshold' columns")
+    if not pd.api.types.is_string_dtype(df["resource"]):
+        raise ValueError(f"{path}: 'resource' must contain strings only")
+    if not pd.api.types.is_integer_dtype(df["resource_level"]):
+        raise ValueError(f"{path}: 'resource_level' must contain integers only")
     if not df["threshold"].isna().all():
         raise ValueError(f"{path}: 'threshold' must be entirely empty -- this file already has a value in it")
     return df.to_dict("records")

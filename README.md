@@ -76,13 +76,16 @@ sigma))`, uncapped, `zone_id` always included. `--sigma 0` collapses this to the
 possible draw: one dimension (`zone_id`), one value, one resource column.
 
 Alternatively, hand it a file that already has `stratum`/`stratum_value` filled in plus one
-or more resource columns (real names and values are welcome here -- they're never
-validated against anything) with every resource column left entirely empty, and it fills in
-just the values, leaving the shape untouched. A file with any resource column already set
-anywhere -- fully or partially, in one column or several -- is left alone and the command
-throws, rather than guessing whether you wanted it regenerated. Passing `--sigma` against a
-file that already exists throws too: `--sigma` only ever controls shape invention, and a
-file that already has shape has nothing left for it to control.
+or more resource columns (real names and values are welcome here) with every resource
+column left entirely empty, and it fills in just the values, leaving the shape untouched.
+`stratum` must contain strings; `stratum_value` is unrestricted -- string or integer labels
+are both fine, since resource columns are identified by header name, not by dtype, so a
+numeric zone ID works exactly as well as a string one. Filled resource columns must contain
+floats. A file with any resource column already set anywhere -- fully or partially, in one
+column or several -- is left alone and the command throws, rather than guessing whether you
+wanted it regenerated. Passing `--sigma` against a file that already exists throws too:
+`--sigma` only ever controls shape invention, and a file that already has shape has nothing
+left for it to control.
 
 ## `synth supply-thresholds` / `synth demand-thresholds` / `synth capacity-thresholds` / `synth need-thresholds`
 
@@ -98,12 +101,15 @@ outcomes.
 | resource_2 | 4 | -0.220 |
 | resource_2 | 9 | (empty) |
 
-`resource_level` is a genuine numeric quantity, not a category label -- it is the actual
-amount of the resource at that outcome, used directly in a weighted sum downstream, even
-though it plays the same shape-defining role `stratum_value` plays for effects. Levels are
-always distinct within a resource (a repeated level would mean two ordinal categories
-mapping to the identical real-world quantity, which has no meaningful interpretation) and
-always ascending; the largest level in a resource has no upper threshold, hence empty.
+`resource` must contain strings; `resource_level` must contain integers only -- a resource
+is always counted in whole units (finer granularity means switching to a smaller unit, e.g.
+tonnes to kilograms, not a fractional level). `resource_level` is a genuine numeric
+quantity, not a category label -- it is the actual amount of the resource at that outcome,
+used directly in a weighted sum downstream, even though it plays the same shape-defining
+role `stratum_value` plays for effects. Levels are always distinct within a resource (a
+repeated level would mean two ordinal categories mapping to the identical real-world
+quantity, which has no meaningful interpretation) and always ascending; the largest level
+in a resource has no upper threshold, hence empty.
 
 ### Synthesis
 
