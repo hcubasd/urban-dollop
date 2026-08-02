@@ -13,7 +13,7 @@ def test_nothing_given_synthesizes_shape_and_values(effects):
     rows = effects(sigma=0.0)
     assert rows == [{
         "stratum": "zone_id",
-        "stratum_value": "zone_1",
+        "stratum_value": 1,
         "resource_1": rows[0]["resource_1"],
     }]
     assert isinstance(rows[0]["resource_1"], float)

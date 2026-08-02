@@ -12,10 +12,16 @@ def random_strata(sigma):
     can end up with a different resource set than any other. Every count
     here is random_count(sigma) -- the only place --sigma acts. Returns
     rows with every resource column set to None, ready to be filled.
+    zone_id values are plain integers (1, 2, ...) rather than string
+    labels -- real zone IDs are typically integers, and zone_id is the
+    one stratum guaranteed to exist, so it's the one place that
+    distinction is worth making. Every other dimension keeps string
+    labels, since there's no equivalent real-world numeric identity to
+    model.
     """
     n_dims = random_count(sigma)
     zone_card = random_count(sigma)
-    dims = {"zone_id": [f"zone_{j + 1}" for j in range(zone_card)]}
+    dims = {"zone_id": [j + 1 for j in range(zone_card)]}
     for i in range(n_dims - 1):
         card = random_count(sigma)
         dims[f"stratum_{i + 1}"] = [f"value_{j + 1}" for j in range(card)]

@@ -16,13 +16,18 @@ def read_effects(path):
     CSV's homogeneous column typing, already guarantees 'stratum' is
     string-typed -- no file can contain the literal string "zone_id" in a
     column CSV would otherwise read back as numeric, so a separate dtype
-    check on 'stratum' would never independently fire), stratum_value
-    unrestricted (string or integer labels are both fine, since nothing
-    downstream disambiguates columns by dtype, only by these two reserved
-    header names), every resource column contains floats only, and every
-    resource column entirely empty (never a mix across any resource column
-    or row, and never "already complete" -- there'd be nothing left for
-    this command to do).
+    check on 'stratum' would never independently fire), stratum_value is a
+    string for every row except zone_id's (zone_id may be int or string --
+    it's the one stratum guaranteed to exist and the one with a natural
+    real-world numeric identity; checked per-row rather than per-column,
+    since stratum_value mixes every dimension in one shared column and
+    CSV's homogeneous typing means a numeric zone_id sharing a file with a
+    string-labeled sibling dimension round-trips as a string anyway --
+    only a per-row check catches a numeric non-zone_id value in a file
+    where every dimension happens to be numeric), every resource column
+    contains floats only, and every resource column entirely empty (never
+    a mix across any resource column or row, and never "already complete"
+    -- there'd be nothing left for this command to do).
     """
     if not os.path.exists(path):
         return None
@@ -40,7 +45,11 @@ def read_effects(path):
             raise ValueError(f"{path}: resource column '{col}' must contain floats only")
     if not df[resource_cols].isna().all().all():
         raise ValueError(f"{path}: every resource column must be entirely empty -- this file already has a value in it")
-    return df.to_dict("records")
+    records = df.to_dict("records")
+    for row in records:
+        if row["stratum"] != "zone_id" and not isinstance(row["stratum_value"], str):
+            raise ValueError(f"{path}: 'stratum_value' must be a string for stratum '{row['stratum']}' -- only zone_id may be numeric")
+    return records
 
 
 def read_thresholds(path):

@@ -5,9 +5,21 @@ def test_zero_sigma_is_deterministic_minimal():
     rows = random_strata(sigma=0.0)
     assert rows == [{
         "stratum": "zone_id",
-        "stratum_value": "zone_1",
+        "stratum_value": 1,
         "resource_1": None,
     }]
+
+
+def test_zone_id_values_are_integers():
+    rows = random_strata(sigma=1.5)
+    zone_values = [r["stratum_value"] for r in rows if r["stratum"] == "zone_id"]
+    assert all(isinstance(v, int) for v in zone_values)
+
+
+def test_non_zone_id_values_are_strings():
+    rows = random_strata(sigma=1.5)
+    other_values = [r["stratum_value"] for r in rows if r["stratum"] != "zone_id"]
+    assert all(isinstance(v, str) for v in other_values)
 
 
 def test_always_includes_zone_id():

@@ -43,8 +43,8 @@ column per resource.
 
 | stratum | stratum_value | resource_1 | resource_2 |
 |---|---|---|---|
-| zone_id | zone_1 | 0.734 | -0.310 |
-| zone_id | zone_2 | -0.051 | 0.884 |
+| zone_id | 1 | 0.734 | -0.310 |
+| zone_id | 2 | -0.051 | 0.884 |
 | stratum_1 | value_1 | 0.512 | -0.204 |
 
 A stratum value can repeat across different strata (`value_1` could belong to both
@@ -72,20 +72,24 @@ duplicate of an intercept that doesn't exist here.
 Each of these four commands is fully self-contained -- none of them look at any other file.
 Run one with nothing on disk yet and it synthesizes shape and values together: dimension
 count, each dimension's value count, and resource count are all `ceil(lognormal(0,
-sigma))`, uncapped, `zone_id` always included. `--sigma 0` collapses this to the smallest
-possible draw: one dimension (`zone_id`), one value, one resource column.
+sigma))`, uncapped, `zone_id` always included. `zone_id` values are plain integers (`1`,
+`2`, ...); every other dimension gets string labels (`value_1`, `value_2`, ...) -- `zone_id`
+is the one stratum guaranteed to exist and the one with a natural real-world numeric
+identity, so it's the one place that distinction is made. `--sigma 0` collapses this to the
+smallest possible draw: one dimension (`zone_id`), one value, one resource column.
 
 Alternatively, hand it a file that already has `stratum`/`stratum_value` filled in plus one
 or more resource columns (real names and values are welcome here) with every resource
 column left entirely empty, and it fills in just the values, leaving the shape untouched.
-`stratum` must contain strings; `stratum_value` is unrestricted -- string or integer labels
-are both fine, since resource columns are identified by header name, not by dtype, so a
-numeric zone ID works exactly as well as a string one. Filled resource columns must contain
-floats. A file with any resource column already set anywhere -- fully or partially, in one
-column or several -- is left alone and the command throws, rather than guessing whether you
-wanted it regenerated. Passing `--sigma` against a file that already exists throws too:
-`--sigma` only ever controls shape invention, and a file that already has shape has nothing
-left for it to control.
+`stratum` must contain strings; `stratum_value` must be a string for every row except
+`zone_id`'s, which may be int or string -- resource columns are identified by header name,
+not by dtype, so this isn't needed for disambiguation, it's just that only `zone_id` has a
+real-world numeric identity worth allowing. Filled resource columns must contain floats. A
+file with any resource column already set anywhere -- fully or partially, in one column or
+several -- is left alone and the command throws, rather than guessing whether you wanted it
+regenerated. Passing `--sigma` against a file that already exists throws too: `--sigma`
+only ever controls shape invention, and a file that already has shape has nothing left for
+it to control.
 
 ## `synth supply-thresholds` / `synth demand-thresholds` / `synth capacity-thresholds` / `synth need-thresholds`
 

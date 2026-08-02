@@ -37,6 +37,26 @@ def test_read_effects_integer_stratum_value_accepted(tmp_path):
     assert [r["stratum_value"] for r in rows] == [1, 2]
 
 
+def test_read_effects_nonstring_non_zone_id_stratum_value_rejected(tmp_path):
+    path = tmp_path / "bad.csv"
+    pd.DataFrame([
+        {"stratum": "zone_id", "stratum_value": 1, "parcels": None},
+        {"stratum": "stratum_1", "stratum_value": 5, "parcels": None},
+    ]).to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        read_effects(str(path))
+
+
+def test_read_effects_string_non_zone_id_stratum_value_accepted(tmp_path):
+    path = tmp_path / "ok.csv"
+    pd.DataFrame([
+        {"stratum": "zone_id", "stratum_value": 1, "parcels": None},
+        {"stratum": "stratum_1", "stratum_value": "value_1", "parcels": None},
+    ]).to_csv(path, index=False)
+    rows = read_effects(str(path))
+    assert rows[1]["stratum_value"] == "value_1"
+
+
 def test_read_effects_nonfloat_resource_column_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([
