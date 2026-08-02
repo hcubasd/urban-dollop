@@ -6,24 +6,27 @@ def test_zero_sigma_is_deterministic_minimal():
     assert rows == [{
         "stratum": "zone_id",
         "stratum_value": "zone_1",
-        "resource": "resource_1",
-        "effect": None,
+        "resource_1": None,
     }]
 
 
 def test_always_includes_zone_id():
     rows = random_strata(sigma=1.5)
-    columns = {r["stratum"] for r in rows}
-    assert "zone_id" in columns
+    strata = {r["stratum"] for r in rows}
+    assert "zone_id" in strata
 
 
-def test_effect_always_none():
+def test_resource_columns_always_none():
     rows = random_strata(sigma=1.0)
-    assert all(r["effect"] is None for r in rows)
+    for row in rows:
+        for key, value in row.items():
+            if key not in ("stratum", "stratum_value"):
+                assert value is None
 
 
-def test_every_stratum_value_crossed_with_every_resource():
+def test_one_row_per_stratum_value_all_sharing_the_same_resource_columns():
     rows = random_strata(sigma=1.5)
     strata_pairs = {(r["stratum"], r["stratum_value"]) for r in rows}
-    resources = {r["resource"] for r in rows}
-    assert len(rows) == len(strata_pairs) * len(resources)
+    assert len(rows) == len(strata_pairs)
+    resource_keysets = {frozenset(r) - {"stratum", "stratum_value"} for r in rows}
+    assert len(resource_keysets) == 1

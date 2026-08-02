@@ -11,17 +11,17 @@ def test_read_effects_none_if_absent(tmp_path):
 def test_read_effects_valid_shape_only(tmp_path):
     path = tmp_path / "supply_effects.csv"
     pd.DataFrame([
-        {"stratum": "zone_id", "stratum_value": "z1", "resource": "parcels", "effect": None},
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": None},
     ]).to_csv(path, index=False)
     rows = read_effects(str(path))
     assert rows[0]["stratum"] == "zone_id"
-    assert rows[0]["resource"] == "parcels"
+    assert "parcels" in rows[0]
 
 
 def test_read_effects_missing_zone_id_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([
-        {"stratum": "stratum_1", "stratum_value": "a", "resource": "parcels", "effect": None},
+        {"stratum": "stratum_1", "stratum_value": "a", "parcels": None},
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_effects(str(path))
@@ -30,18 +30,17 @@ def test_read_effects_missing_zone_id_rejected(tmp_path):
 def test_read_effects_nonstring_stratum_value_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([
-        {"stratum": "zone_id", "stratum_value": 1, "resource": "parcels", "effect": None},
-        {"stratum": "zone_id", "stratum_value": 2, "resource": "parcels", "effect": None},
+        {"stratum": "zone_id", "stratum_value": 1, "parcels": None},
+        {"stratum": "zone_id", "stratum_value": 2, "parcels": None},
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_effects(str(path))
 
 
-def test_read_effects_nonstring_resource_rejected(tmp_path):
+def test_read_effects_no_resource_columns_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([
-        {"stratum": "zone_id", "stratum_value": "z1", "resource": 1, "effect": None},
-        {"stratum": "zone_id", "stratum_value": "z1", "resource": 2, "effect": None},
+        {"stratum": "zone_id", "stratum_value": "z1"},
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_effects(str(path))
@@ -50,7 +49,7 @@ def test_read_effects_nonstring_resource_rejected(tmp_path):
 def test_read_effects_already_filled_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([
-        {"stratum": "zone_id", "stratum_value": "z1", "resource": "parcels", "effect": 0.5},
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5},
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_effects(str(path))
@@ -59,8 +58,17 @@ def test_read_effects_already_filled_rejected(tmp_path):
 def test_read_effects_partially_filled_rejected(tmp_path):
     path = tmp_path / "bad.csv"
     pd.DataFrame([
-        {"stratum": "zone_id", "stratum_value": "z1", "resource": "parcels", "effect": 0.5},
-        {"stratum": "zone_id", "stratum_value": "z2", "resource": "parcels", "effect": None},
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5},
+        {"stratum": "zone_id", "stratum_value": "z2", "parcels": None},
+    ]).to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        read_effects(str(path))
+
+
+def test_read_effects_one_resource_column_filled_another_empty_rejected(tmp_path):
+    path = tmp_path / "bad.csv"
+    pd.DataFrame([
+        {"stratum": "zone_id", "stratum_value": "z1", "parcels": 0.5, "pallets": None},
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_effects(str(path))

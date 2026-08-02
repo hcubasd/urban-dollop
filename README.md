@@ -38,24 +38,23 @@ flowchart LR
 
 Coefficients for a textbook additive (main-effects, no interactions among stratum
 dimensions) ordered-logit linear predictor -- the cumulative logit / proportional odds
-model of McCullagh (1980). Output is long-format: one row per (stratum, stratum value,
-resource) triple, never one row per full combination.
+model of McCullagh (1980). Output is wide: one row per (stratum, stratum value) pair, one
+column per resource.
 
-| stratum | stratum_value | resource | effect |
+| stratum | stratum_value | resource_1 | resource_2 |
 |---|---|---|---|
-| zone_id | zone_1 | resource_1 | 0.734 |
-| zone_id | zone_2 | resource_1 | -0.051 |
-| stratum_1 | value_1 | resource_1 | 0.512 |
-| zone_id | zone_1 | resource_2 | -0.310 |
-| zone_id | zone_2 | resource_2 | 0.884 |
+| zone_id | zone_1 | 0.734 | -0.310 |
+| zone_id | zone_2 | -0.051 | 0.884 |
+| stratum_1 | value_1 | 0.512 | -0.204 |
 
 A stratum value can repeat across different strata (`value_1` could belong to both
 `stratum_1` and `stratum_2`) -- values are only unique within their own stratum, not across
-the file. `resource` indexes which independent model a row belongs to, not a covariate on
-a shared one: each resource gets its own linear predictor ($\beta$), the sum of whichever
-rows apply to a given stratum combination *for that resource*. A stratum's shape (which
-dimensions exist, how many values each has) is shared across resources; only the effect
-values differ per resource.
+the file. Each resource column is its own independent linear predictor ($\beta$), the sum
+of whichever rows apply to a given stratum combination *for that resource* -- a resource
+column indexes which independent model a cell belongs to, not a covariate on a shared one.
+Every row carries a value for every resource column, so the stratum shape (which dimensions
+exist, how many values each has) is structurally guaranteed to be shared across resources;
+only the effect values differ per resource.
 
 `supply`/`demand` describe a stratum's aggregate resource totals; `capacity`/`need`
 describe the size distribution of individual agents drawn from that stratum later --
@@ -63,7 +62,7 @@ different questions, same statistical machinery, four independent files.
 
 ### Synthesis
 
-Every `effect` is drawn from a standard normal, `Normal(0, 1)`, fixed regardless of
+Every effect value is drawn from a standard normal, `Normal(0, 1)`, fixed regardless of
 `--sigma` -- it is the value being synthesized, not a count of how much to synthesize. Mean
 zero is not an arbitrary default: with no reference category dropped and no separate
 intercept anywhere in this design, each effect is a random effect (in the mixed-model
@@ -74,15 +73,16 @@ Each of these four commands is fully self-contained -- none of them look at any 
 Run one with nothing on disk yet and it synthesizes shape and values together: dimension
 count, each dimension's value count, and resource count are all `ceil(lognormal(0,
 sigma))`, uncapped, `zone_id` always included. `--sigma 0` collapses this to the smallest
-possible draw: one dimension (`zone_id`), one value, one resource.
+possible draw: one dimension (`zone_id`), one value, one resource column.
 
-Alternatively, hand it a file that already has `stratum`/`stratum_value`/`resource` filled
-in (real names and values are welcome here -- they're never validated against anything)
-with `effect` left entirely empty, and it fills in just the values, leaving the shape
-untouched. A file with `effect` already set anywhere -- fully or partially -- is left alone
-and the command throws, rather than guessing whether you wanted it regenerated. Passing
-`--sigma` against a file that already exists throws too: `--sigma` only ever controls shape
-invention, and a file that already has shape has nothing left for it to control.
+Alternatively, hand it a file that already has `stratum`/`stratum_value` filled in plus one
+or more resource columns (real names and values are welcome here -- they're never
+validated against anything) with every resource column left entirely empty, and it fills in
+just the values, leaving the shape untouched. A file with any resource column already set
+anywhere -- fully or partially, in one column or several -- is left alone and the command
+throws, rather than guessing whether you wanted it regenerated. Passing `--sigma` against a
+file that already exists throws too: `--sigma` only ever controls shape invention, and a
+file that already has shape has nothing left for it to control.
 
 ## `synth supply-thresholds` / `synth demand-thresholds` / `synth capacity-thresholds` / `synth need-thresholds`
 

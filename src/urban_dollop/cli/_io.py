@@ -8,28 +8,30 @@ import pandas as pd
 
 
 def read_effects(path):
-    """rows (stratum/stratum_value/resource/effect) if `path` exists, else
-    None -- None signals full synthesis to the matching synth/ function.
-    Raises ValueError if the file exists but doesn't meet the leaf contract:
-    the required columns, zone_id present among stratum values, stratum_value
-    and resource both all strings, and effect either entirely empty or
-    entirely filled (never a mix, and never "already complete" -- there'd be
-    nothing left for this command to do).
+    """rows (stratum/stratum_value, plus one column per resource) if `path`
+    exists, else None -- None signals full synthesis to the matching
+    synth/ function. Raises ValueError if the file exists but doesn't meet
+    the leaf contract: 'stratum'/'stratum_value' present plus at least one
+    resource column, zone_id present among stratum values, stratum_value
+    all strings, and every resource column entirely empty (never a mix
+    across any resource column or row, and never "already complete" --
+    there'd be nothing left for this command to do).
     """
     if not os.path.exists(path):
         return None
     df = pd.read_csv(path)
-    for col in ("stratum", "stratum_value", "resource", "effect"):
+    for col in ("stratum", "stratum_value"):
         if col not in df.columns:
             raise ValueError(f"{path}: missing '{col}' column")
+    resource_cols = [c for c in df.columns if c not in ("stratum", "stratum_value")]
+    if not resource_cols:
+        raise ValueError(f"{path}: must have at least one resource column")
     if "zone_id" not in set(df["stratum"]):
         raise ValueError(f"{path}: 'zone_id' must be present among stratum values")
     if not pd.api.types.is_string_dtype(df["stratum_value"]):
         raise ValueError(f"{path}: 'stratum_value' must contain strings only")
-    if not pd.api.types.is_string_dtype(df["resource"]):
-        raise ValueError(f"{path}: 'resource' must contain strings only")
-    if not df["effect"].isna().all():
-        raise ValueError(f"{path}: 'effect' must be entirely empty -- this file already has a value in it")
+    if not df[resource_cols].isna().all().all():
+        raise ValueError(f"{path}: every resource column must be entirely empty -- this file already has a value in it")
     return df.to_dict("records")
 
 

@@ -3,10 +3,14 @@ from urban_dollop.helpers.random_strata import random_strata
 
 
 def demand_effects(rows=None, sigma=1.0):
-    """rows: existing stratum_column/stratum_value/effect rows (effect may
-    be None throughout). None means nothing exists yet -- invent the shape
-    too. Returns rows with every empty effect filled.
+    """rows: existing stratum/stratum_value rows plus one column per
+    resource (each may be None throughout). None means nothing exists yet
+    -- invent the shape too. Returns rows with every empty resource column
+    filled.
     """
     if rows is None:
         rows = random_strata(sigma)
-    return fill_value(rows, "effect")
+    resource_cols = [c for c in rows[0] if c not in ("stratum", "stratum_value")]
+    for col in resource_cols:
+        rows = fill_value(rows, col)
+    return rows
