@@ -170,3 +170,42 @@ values together; a file with `resource`/`resource_level` filled in and `threshol
 empty gets just its thresholds filled; anything with `threshold` already set anywhere is
 left alone and the command throws. Passing `--sigma` against a file that already exists
 throws too, same reasoning as effects.
+
+## `synth supply` / `synth demand` / `synth capacities` / `synth needs`
+
+Combines a pair of upstream files (`supply_effects.csv` + `supply_thresholds.csv`, and so on
+for the other three) into the actual ordered-logit output. Unlike every other command, this
+one invents nothing -- it's a pure function of already-computed data, so `--sigma` has no
+meaning here at all: passing it throws unconditionally, not just when the output file
+already exists.
+
+Only resources present in **both** the effects file (as a column) and the thresholds file
+(as a `resource` value) get combined -- a resource missing from either side has nothing to
+evaluate it against. For each such resource, a full stratum combination (the cartesian
+product of every dimension in `effects.csv`, e.g. every `zone_id` × every `stratum_1` value)
+needs *every* constituent dimension-value's effect to compute a beta; if even one is
+missing, that whole combination is omitted for that resource -- never given a
+zero-contribution stand-in. `resource_level = 0` is itself a real, reachable outcome, so it
+can never double as an "undefined" marker; omission and an explicit computed `0` stay
+distinguishable all the way through.
+
+`supply.csv`/`demand.csv` are wide: one column per stratum dimension plus one column per
+combined resource, holding the **rounded** expected value of that resource's distribution --
+resource is always counted in whole units, so a fractional expected value isn't a
+deliverable quantity. A combination with no computable value for a resource simply doesn't
+get that column set for that row.
+
+`capacities.csv`/`needs.csv` are wide on stratum dimensions but long on resource: explicit
+`resource`, `resource_level`, `probability` columns, multiple rows per stratum combination.
+Nothing gets rounded or collapsed here -- this is the actual distribution individual agents
+get sampled from later, so it has to stay a distribution.
+
+### Synthesis
+
+Deterministic, not random: the same effects + thresholds always produce the same output.
+Because of that, once the output file exists, the command is a no-op rather than
+overwriting it -- same protective posture as everywhere else in this arc (a user may have
+hand-calibrated the output against real totals after generation), even though a fresh
+recompute against unchanged inputs would give an identical file anyway. Delete the output
+file to force a regenerate. If either upstream file is still absent or shape-only, the
+command throws with a pointer to which leaf command to run first.

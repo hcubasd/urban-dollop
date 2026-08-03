@@ -73,6 +73,22 @@ def main():
         from urban_dollop.cli.synth_need_thresholds import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "supply"]:
+        from urban_dollop.cli.synth_supply import run
+
+        run(sigma, sigma_given)
+    elif command == ["synth", "demand"]:
+        from urban_dollop.cli.synth_demand import run
+
+        run(sigma, sigma_given)
+    elif command == ["synth", "capacities"]:
+        from urban_dollop.cli.synth_capacities import run
+
+        run(sigma, sigma_given)
+    elif command == ["synth", "needs"]:
+        from urban_dollop.cli.synth_needs import run
+
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)

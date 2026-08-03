@@ -4,6 +4,8 @@ import pytest
 from urban_dollop.cli._io import (
     check_sigma_relevant,
     effects_need_synthesis,
+    load_effects_and_thresholds,
+    read_computed_thresholds,
     read_effects,
     read_thresholds,
     write_rows,
@@ -177,6 +179,80 @@ def test_read_thresholds_already_filled_rejected(tmp_path):
     ]).to_csv(path, index=False)
     with pytest.raises(ValueError):
         read_thresholds(str(path))
+
+
+def test_read_computed_thresholds_none_if_absent(tmp_path):
+    assert read_computed_thresholds(str(tmp_path / "missing.csv")) is None
+
+
+def test_read_computed_thresholds_returns_rows_when_filled(tmp_path):
+    path = tmp_path / "filled.csv"
+    pd.DataFrame([
+        {"resource": "parcels", "resource_level": 1, "threshold": 0.2},
+        {"resource": "parcels", "resource_level": 2, "threshold": None},
+    ]).to_csv(path, index=False)
+    rows = read_computed_thresholds(str(path))
+    assert rows[0]["threshold"] == 0.2
+
+
+def test_read_computed_thresholds_single_level_resource_is_ready(tmp_path):
+    path = tmp_path / "single_level.csv"
+    pd.DataFrame([
+        {"resource": "parcels", "resource_level": 1, "threshold": None},
+    ]).to_csv(path, index=False)
+    rows = read_computed_thresholds(str(path))
+    assert rows is not None
+
+
+def test_read_computed_thresholds_multi_level_shape_only_not_ready(tmp_path):
+    path = tmp_path / "multi_shape_only.csv"
+    pd.DataFrame([
+        {"resource": "parcels", "resource_level": 1, "threshold": None},
+        {"resource": "parcels", "resource_level": 2, "threshold": None},
+        {"resource": "parcels", "resource_level": 3, "threshold": None},
+    ]).to_csv(path, index=False)
+    assert read_computed_thresholds(str(path)) is None
+
+
+def test_read_computed_thresholds_still_validates_structure(tmp_path):
+    path = tmp_path / "bad.csv"
+    pd.DataFrame([{"resource": "parcels", "threshold": None}]).to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        read_computed_thresholds(str(path))
+
+
+def test_load_effects_and_thresholds_ok(tmp_path):
+    effects_path = tmp_path / "effects.csv"
+    thresholds_path = tmp_path / "thresholds.csv"
+    pd.DataFrame([
+        {"stratum": "zone_id", "stratum_value": 1, "parcels": 0.5},
+    ]).to_csv(effects_path, index=False)
+    pd.DataFrame([
+        {"resource": "parcels", "resource_level": 1, "threshold": None},
+    ]).to_csv(thresholds_path, index=False)
+    effects_rows, thresholds_rows = load_effects_and_thresholds(str(effects_path), str(thresholds_path))
+    assert effects_rows[0]["parcels"] == 0.5
+    assert thresholds_rows[0]["resource"] == "parcels"
+
+
+def test_load_effects_and_thresholds_raises_when_effects_not_ready(tmp_path):
+    effects_path = tmp_path / "missing_effects.csv"
+    thresholds_path = tmp_path / "thresholds.csv"
+    pd.DataFrame([
+        {"resource": "parcels", "resource_level": 1, "threshold": None},
+    ]).to_csv(thresholds_path, index=False)
+    with pytest.raises(ValueError):
+        load_effects_and_thresholds(str(effects_path), str(thresholds_path))
+
+
+def test_load_effects_and_thresholds_raises_when_thresholds_not_ready(tmp_path):
+    effects_path = tmp_path / "effects.csv"
+    thresholds_path = tmp_path / "missing_thresholds.csv"
+    pd.DataFrame([
+        {"stratum": "zone_id", "stratum_value": 1, "parcels": 0.5},
+    ]).to_csv(effects_path, index=False)
+    with pytest.raises(ValueError):
+        load_effects_and_thresholds(str(effects_path), str(thresholds_path))
 
 
 def test_write_rows_round_trips(tmp_path):

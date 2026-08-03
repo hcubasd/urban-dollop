@@ -79,6 +79,15 @@ def effects_need_synthesis(rows):
     )
 
 
+def _validate_thresholds_structure(df, path):
+    if set(df.columns) != {"resource", "resource_level", "threshold"}:
+        raise ValueError(f"{path}: must have exactly 'resource', 'resource_level', 'threshold' columns")
+    if not pd.api.types.is_string_dtype(df["resource"]):
+        raise ValueError(f"{path}: 'resource' must contain strings only")
+    if not pd.api.types.is_integer_dtype(df["resource_level"]):
+        raise ValueError(f"{path}: 'resource_level' must contain integers only")
+
+
 def read_thresholds(path):
     """rows (resource/resource_level/threshold) if `path` exists, else None.
     Raises ValueError if the file exists but doesn't meet the leaf contract:
@@ -90,15 +99,56 @@ def read_thresholds(path):
     if not os.path.exists(path):
         return None
     df = pd.read_csv(path)
-    if set(df.columns) != {"resource", "resource_level", "threshold"}:
-        raise ValueError(f"{path}: must have exactly 'resource', 'resource_level', 'threshold' columns")
-    if not pd.api.types.is_string_dtype(df["resource"]):
-        raise ValueError(f"{path}: 'resource' must contain strings only")
-    if not pd.api.types.is_integer_dtype(df["resource_level"]):
-        raise ValueError(f"{path}: 'resource_level' must contain integers only")
+    _validate_thresholds_structure(df, path)
     if not df["threshold"].isna().all():
         raise ValueError(f"{path}: 'threshold' must be entirely empty -- this file already has a value in it")
     return df.to_dict("records")
+
+
+def read_computed_thresholds(path):
+    """rows (resource/resource_level/threshold) if `path` exists and has
+    already been filled by its leaf synth command, else None -- None
+    covers both "absent" and "still shape-only," since a Layer 2 combiner
+    needs actual computed thresholds either way and can't do anything
+    with either. This is the mirror image of read_thresholds: that one is
+    for the leaf command and throws unless the file is still shape-only;
+    this one is for a downstream combiner and never throws just because
+    the file is complete -- that's the state it's looking for.
+
+    Readiness is checked per resource, not file-wide: a resource is
+    "filled" once at most one of its levels (the largest, which never
+    gets an upper threshold) is still empty. A file-wide "any threshold
+    empty" check would wrongly call a single-level resource shape-only
+    forever -- its one level's threshold is always empty, filled or not,
+    since there's nothing to fill -- and the reverse mistake (treating a
+    genuinely unfilled multi-level resource as ready) would feed
+    combine_resources fewer thresholds than levels, crashing on a
+    mismatched index rather than just producing a wrong answer.
+    """
+    if not os.path.exists(path):
+        return None
+    df = pd.read_csv(path)
+    _validate_thresholds_structure(df, path)
+    empty_counts = df.groupby("resource")["threshold"].apply(lambda s: s.isna().sum())
+    if (empty_counts > 1).any():
+        return None
+    return df.to_dict("records")
+
+
+def load_effects_and_thresholds(effects_path, thresholds_path):
+    """(effects_rows, thresholds_rows), both computed and ready to combine.
+    Raises ValueError with a clear pointer to the missing step if either
+    upstream file is absent or still shape-only -- a Layer 2 combiner has
+    nothing to work with in either case, and "which leaf command to run
+    first" is exactly the information worth surfacing here.
+    """
+    effects_rows = read_effects(effects_path)
+    if effects_need_synthesis(effects_rows):
+        raise ValueError(f"{effects_path}: not ready yet -- synthesize it first")
+    thresholds_rows = read_computed_thresholds(thresholds_path)
+    if thresholds_rows is None:
+        raise ValueError(f"{thresholds_path}: not ready yet -- synthesize it first")
+    return effects_rows, thresholds_rows
 
 
 def check_sigma_relevant(rows, sigma_given, path):
