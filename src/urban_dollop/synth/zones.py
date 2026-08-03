@@ -1,15 +1,11 @@
-import math
 import random
 
 import geopandas as gpd
 import numpy as np
 from scipy.spatial import Voronoi
 from shapely.geometry import Polygon
-from shapely.ops import unary_union
 
-from urban_dollop.helpers.log_normal import log_normal
-from urban_dollop.helpers.normal import normal_sample
-from urban_dollop.helpers.primes import prime
+from urban_dollop.helpers.random_count import random_count
 
 
 def _clip_voronoi_cell(vor, region_index, bounds):
@@ -26,8 +22,20 @@ def _clip_voronoi_cell(vor, region_index, bounds):
     return poly.intersection(box)
 
 
-def zones():
-    n_zones = prime(math.ceil(log_normal(normal_sample(0.0, 1.0))))
+def zones(zone_ids=None, sigma=1.0):
+    """A GeoDataFrame of Voronoi-tessellated zone polygons over the unit
+    square, one row per zone_id. zone_ids=None means nothing exists yet --
+    invent both the count (random_count(sigma), the only place --sigma
+    acts) and the labels (plain integers 1, 2, ... matching effects.csv's
+    zone_id convention). zone_ids given means the shape is already decided
+    -- geometry gets synthesized for exactly those zone_ids, in that
+    order, ignoring sigma for the count (there's nothing left for it to
+    control).
+    """
+    if zone_ids is None:
+        zone_ids = list(range(1, random_count(sigma) + 1))
+    n_zones = len(zone_ids)
+
     # seed points inside [0.1, 0.9]^2 so boundary cells are well-formed
     points = [(random.uniform(0.1, 0.9), random.uniform(0.1, 0.9)) for _ in range(n_zones)]
     # mirror points around all four edges to bound infinite regions
@@ -42,5 +50,4 @@ def zones():
         point_region = vor.point_region[i]
         geom = _clip_voronoi_cell(vor, point_region, bounds)
         geometries.append(geom)
-    labels = [f"zone_{i + 1}" for i in range(n_zones)]
-    return gpd.GeoDataFrame({"zone_id": labels, "geometry": geometries}, crs=None)
+    return gpd.GeoDataFrame({"zone_id": zone_ids, "geometry": geometries}, crs=None)

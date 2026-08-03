@@ -34,6 +34,30 @@ flowchart LR
     emission_factors[emission-factors] --> network_emissions
 ```
 
+## `synth zones`
+
+A GeoDataFrame of Voronoi-tessellated zone polygons over the unit square, one row per
+`zone_id`, written to `zones.gpkg`. `zone_id` values are plain integers (`1`, `2`, ...),
+matching the convention `effects.csv` uses for its own `zone_id` stratum.
+
+### Synthesis
+
+Fully self-contained, same leaf contract as every other command. Run it with nothing on
+disk yet and it invents both the zone count (`ceil(lognormal(0, sigma))`, the only place
+`--sigma` acts) and the labels, then tessellates geometry for them.
+
+Alternatively, hand it a `zones.gpkg` that already has a `zone_id` column (real IDs are
+welcome, and can be integers or strings) with `geometry` left entirely empty, and it
+synthesizes geometry for exactly those zones, in that order -- the count comes from the
+shape you gave it, not from `--sigma`. A file with geometry already populated anywhere is
+left alone and the command is a no-op: it doesn't matter whether every zone has geometry or
+only some do, any real geometry at all means the file is complete (partial geometry would
+mean regenerating some zones' shapes but not others, which makes no sense for a
+tessellation -- unlike `effects.csv`, there's no legitimate reason for geometry to be
+partially populated on purpose). Passing `--sigma` against a file that already exists
+throws either way (shape-only or complete): `--sigma` only ever controls count invention,
+and a file that already has a zone_id list has nothing left for it to control.
+
 ## `synth supply-effects` / `synth demand-effects` / `synth capacity-effects` / `synth need-effects`
 
 Coefficients for a textbook additive (main-effects, no interactions among stratum

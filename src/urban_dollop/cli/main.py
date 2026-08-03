@@ -37,7 +37,11 @@ def main():
     sigma, sigma_given, args = _parse_sigma(sys.argv[1:])
     command = args[:2]
 
-    if command == ["synth", "supply-effects"]:
+    if command == ["synth", "zones"]:
+        from urban_dollop.cli.synth_zones import run
+
+        run(sigma, sigma_given)
+    elif command == ["synth", "supply-effects"]:
         from urban_dollop.cli.synth_supply_effects import run
 
         run(sigma, sigma_given)
