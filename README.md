@@ -209,3 +209,54 @@ hand-calibrated the output against real totals after generation), even though a 
 recompute against unchanged inputs would give an identical file anyway. Delete the output
 file to force a regenerate. If either upstream file is still absent or shape-only, the
 command throws with a pointer to which leaf command to run first.
+
+## `synth agents`
+
+Combines `supply.csv`, `demand.csv`, `capacities.csv`, `needs.csv`, and `zones.gpkg` --
+five independently-synthesized files -- into `agents.gpkg`: one row per synthesized agent,
+with `agent_id`, `geometry`, the stratum dimension columns, and `{resource}_capacity` /
+`{resource}_need` for every usable resource.
+
+A stratum combination is only usable if its dimension *set* matches exactly across all four
+data files -- not just overlaps. A dimension present in one file but not another means their
+notion of "stratum" isn't even the same shape, so under pure independent synthesis (no
+aligned shape-only input across the four upstream commands) this intersection can easily be
+sparse or empty; that's expected, not a bug -- `--sigma 0` collapses every file to the same
+single minimal stratum, so it always matches there, but larger, independent `--sigma` draws
+make agreement increasingly unlikely by construction. Zone identity is matched separately
+against `zones.gpkg`, normalized on both sides to guard against a numeric `zone_id`
+silently stringifying on a CSV round-trip in a file that also has string-labeled sibling
+dimensions.
+
+A resource is usable for a stratum combination only if it has a real value in **all four**
+files for that exact combination: supply and demand each need a defined aggregate (not an
+omitted cell), and capacities and needs each need an actual distribution. An agent is a
+single coherent record needing a valid draw for every usable resource at once, so a resource
+missing from even one of the four isn't included for that stratum at all -- there'd be no
+way to give an agent a well-defined value for it.
+
+### Synthesis
+
+Agents are drawn one at a time per stratum, depleting that stratum's supply/demand budget as
+they go. Each draw independently truncates the capacity distribution to the remaining supply
+and the need distribution to the remaining demand, renormalizes, and draws one value from
+each via `uniform(0, 1)` -- capacity and need for the same resource are independent draws,
+not correlated. Generation for a stratum halts the moment *any* resource can't produce a
+feasible draw (its distribution's smallest level exceeds what's left) -- a single agent is
+one coherent record, so if even one resource can't be given a valid value, no valid agent
+can be produced, and every later attempt would only face equal-or-worse depletion. It also
+halts after committing an agent that made zero progress on every tracked resource
+simultaneously (e.g. a resource whose only synthesized level in that stratum is `0`, which
+is always feasible and never depletes anything) -- otherwise that state would repeat forever
+by the same idempotency the truncation itself relies on. A depleting-toward-zero-need agent
+is a completely ordinary, expected outcome, not a stopping condition by itself.
+
+Agent placement: uniform random `(x, y)` in the zone polygon's bounding box, rejected and
+redrawn until the point actually falls inside the polygon.
+
+Like `synth supply` and friends, this invents nothing new (agent *count* is emergent from
+the depletion loop, not a synthesized shape), so `--sigma` throws unconditionally, and the
+command is a no-op once `agents.gpkg` already exists -- even more important here than for
+the pure combiners, since agent synthesis has genuine randomness: an accidental re-run
+wouldn't just redundantly recompute the same file, it would silently replace the whole agent
+population with a different random draw.

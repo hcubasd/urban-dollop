@@ -1,98 +1,70 @@
-import random
-
-import geopandas as gpd
-import pandas as pd
-from shapely.geometry import Point
+from urban_dollop.helpers.combine_agent_inputs import combine_agent_inputs
+from urban_dollop.helpers.sample_point import sample_point
+from urban_dollop.helpers.truncated_draw import truncated_draw
 
 
-def _sample_point(polygon):
-    minx, miny, maxx, maxy = polygon.bounds
-    while True:
-        x = random.uniform(minx, maxx)
-        y = random.uniform(miny, maxy)
-        p = Point(x, y)
-        if polygon.contains(p):
-            return p
+def agents(supply_rows, demand_rows, capacities_rows, needs_rows, zones_gdf):
+    """One row per synthesized agent: agent_id, geometry, the stratum's
+    dimension values, and {resource}_capacity/{resource}_need for every
+    resource usable in that stratum (see combine_agent_inputs).
 
+    Agents are drawn one at a time per stratum, depleting that stratum's
+    supply/demand budget as they go. Each draw independently truncates
+    the capacity distribution to the remaining supply and the need
+    distribution to the remaining demand (renormalized), then draws one
+    value from each via a uniform(0, 1) -- capacity and need for the same
+    resource are independent draws, not shared. An agent is a single
+    coherent record: if *any* resource can't produce a valid draw (no
+    remaining-feasible level in its distribution), no valid agent can be
+    produced at all, so generation for that stratum halts entirely --
+    not just for that one resource -- since every subsequent attempt
+    would face equal-or-worse depletion and fail the same way.
 
-def _draw_batch(pairs):
-    total = sum(p for _, p in pairs)
-    u = random.random()
-    cumulative = 0.0
-    for size, prob in pairs:
-        cumulative += prob / total
-        if u <= cumulative:
-            return size
-    return pairs[-1][0]
-
-
-def agents(supply_df, demand_df, batch_sizes_df, zones_gdf):
-    zone_col = [c for c in zones_gdf.columns if c != "geometry" and pd.api.types.is_string_dtype(zones_gdf[c])][0]
-
-    supply_strata = [c for c in supply_df.columns if pd.api.types.is_string_dtype(supply_df[c])]
-    demand_strata = [c for c in demand_df.columns if pd.api.types.is_string_dtype(demand_df[c])]
-    supply_resources = [c for c in supply_df.columns if pd.api.types.is_integer_dtype(supply_df[c])]
-    demand_resources = [c for c in demand_df.columns if pd.api.types.is_integer_dtype(demand_df[c])]
-
-    shared_strata = [c for c in supply_strata if c in demand_strata]
-    all_strata = shared_strata
-
-    batch_dist = {}
-    for resource, group in batch_sizes_df.groupby("resource"):
-        batch_dist[resource] = sorted(zip(group["batch_size"].tolist(), group["probability"].tolist()))
-
-    all_resources = [
-        r for r in dict.fromkeys(supply_resources + [c for c in demand_resources if c not in supply_resources])
-        if r in batch_dist
-    ]
-
-    zone_lookup = dict(zip(zones_gdf[zone_col].tolist(), zones_gdf.geometry.tolist()))
-
-    supply_work = supply_df.rename(columns={r: f"{r}_supply" for r in supply_resources})
-    supply_work = supply_work.groupby(shared_strata)[[f"{r}_supply" for r in supply_resources if f"{r}_supply" in supply_work.columns]].sum().reset_index()
-
-    demand_work = demand_df.rename(columns={r: f"{r}_demand" for r in demand_resources})
-    demand_work = demand_work.groupby(shared_strata)[[f"{r}_demand" for r in demand_resources if f"{r}_demand" in demand_work.columns]].sum().reset_index()
-
-    merged = supply_work.merge(demand_work, on=shared_strata, how="outer")
-
-    for r in all_resources:
-        for suffix in ("_supply", "_demand"):
-            col = f"{r}{suffix}"
-            if col in merged.columns:
-                merged[col] = merged[col].fillna(0).astype(int)
-            else:
-                merged[col] = 0
+    A second halt condition catches a case infeasibility alone doesn't:
+    every draw is technically feasible but reduces no remaining budget at
+    all, e.g. a resource whose only synthesized level in a stratum is 0
+    -- 0 is always <= any non-negative remaining budget, so this would
+    never trip the infeasibility halt and would draw forever, all zeros,
+    without ever making progress. If a round makes zero progress on
+    every tracked resource's supply and demand simultaneously, that
+    agent is still committed (it's a legitimate, valid draw), but
+    generation then halts immediately afterward -- by the same
+    idempotency argument as the truncation logic itself, every
+    subsequent round would face the identical state and repeat forever.
+    """
+    contexts = combine_agent_inputs(supply_rows, demand_rows, capacities_rows, needs_rows, zones_gdf)
 
     rows = []
-    for _, row in merged.iterrows():
-        zone_value = row[zone_col]
-        if pd.isna(zone_value) or zone_value not in zone_lookup:
-            continue
-        polygon = zone_lookup[zone_value]
-
-        stratum_vals = {
-            col: (row[col] if col in merged.columns and not pd.isna(row[col]) else None)
-            for col in all_strata
+    agent_id = 0
+    for context in contexts:
+        remaining = {
+            resource: {"supply": info["supply"], "demand": info["demand"]}
+            for resource, info in context["resources"].items()
         }
+        while True:
+            draws = {}
+            for resource, info in context["resources"].items():
+                capacity = truncated_draw(info["capacity_pmf"], remaining[resource]["supply"])
+                need = truncated_draw(info["need_pmf"], remaining[resource]["demand"])
+                if capacity is None or need is None:
+                    draws = None
+                    break
+                draws[resource] = (capacity, need)
+            if draws is None:
+                break
 
-        remaining = {r: [int(row[f"{r}_supply"]), int(row[f"{r}_demand"])] for r in all_resources}
-
-        while any(remaining[r][0] > 0 or remaining[r][1] > 0 for r in all_resources):
-            agent = dict(stratum_vals)
-            agent["geometry"] = _sample_point(polygon)
-            for r in all_resources:
-                batch = _draw_batch(batch_dist[r])
-                s_take = min(batch, remaining[r][0])
-                d_take = min(batch, remaining[r][1])
-                agent[f"{r}_supply"] = s_take
-                agent[f"{r}_demand"] = d_take
-                remaining[r][0] -= s_take
-                remaining[r][1] -= d_take
-            rows.append(agent)
-
-    if not rows:
-        cols = all_strata + [f"{r}_supply" for r in all_resources] + [f"{r}_demand" for r in all_resources] + ["geometry"]
-        return gpd.GeoDataFrame(columns=cols, crs=None)
-
-    return gpd.GeoDataFrame(rows, crs=None)
+            agent_id += 1
+            row = dict(context["dims"])
+            row["agent_id"] = agent_id
+            row["geometry"] = sample_point(context["polygon"])
+            made_progress = False
+            for resource, (capacity, need) in draws.items():
+                row[f"{resource}_capacity"] = capacity
+                row[f"{resource}_need"] = need
+                remaining[resource]["supply"] -= capacity
+                remaining[resource]["demand"] -= need
+                made_progress = made_progress or capacity != 0 or need != 0
+            rows.append(row)
+            if not made_progress:
+                break
+    return rows
