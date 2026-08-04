@@ -614,3 +614,56 @@ don't need to be a full cross product, same reasoning as `vehicle-velocities`. A
 no-op. Passing `--sigma` against a file that already exists throws either way (shape-only or
 complete): `--sigma` only ever controls count invention, and a file that already has
 vehicle/resource pairs has nothing left for it to control.
+
+## `synth vehicles`
+
+One row per vehicle, written to `vehicles.csv`: `vehicle`, `vehicle_type`, `bpr_alpha`,
+`bpr_beta`, `time_coefficient`, `distance_coefficient`, and `pcu`. Self-contained -- never
+reads any other file. `vehicle_type` isn't used anywhere in this pipeline yet, but
+`emission-factors` needs it once it's built.
+
+| vehicle | vehicle_type | bpr_alpha | bpr_beta | time_coefficient | distance_coefficient | pcu |
+|---|---|---|---|---|---|---|
+| vehicle_1 | vehicle_type_3 | 0.206 | 2.755 | -0.299 | -0.607 | 0.849 |
+| vehicle_2 | vehicle_type_6 | 1.238 | 6.361 | -2.075 | -0.162 | 0.436 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for the vehicle count and for the
+size of the `vehicle_type` vocabulary (`vehicle_type_1`, `vehicle_type_2`, ...) each vehicle
+draws from -- the vocabulary size stays sigma-driven even when a `vehicle_list` is given
+(shape-only mode below), the same way `network`'s `road_type` vocabulary stays sigma-driven
+even when geometry is given: `--sigma` always throws once `vehicles.csv` already exists, so a
+caller can never actually exercise that control either way.
+
+`bpr_alpha`/`bpr_beta` are the BPR congestion function's parameters
+(`t = t0 * (1 + alpha * (v/c)^beta)`), and unlike every other positive value in this
+pipeline, they're `triangular`, not `lognormal`. Both have a well-known real convention (the
+1964 Bureau of Public Roads defaults, `alpha=0.15`, `beta=4`) and a well-known calibrated
+range in the transportation literature (roughly `alpha` in `[0.05, 2]`, `beta` in `[2, 10]`),
+so `triangular`'s hard bounds plus a mode at the standard value map onto that directly --
+`bpr_alpha = triangular(0.05, 2.0, 0.15)`, `bpr_beta = triangular(2.0, 10.0, 4.0)` -- the same
+reasoning `network`'s `grade` uses `triangular(-6, 6, 0)` instead of an unbounded
+distribution.
+
+`time_coefficient`/`distance_coefficient` are the discrete-choice model's marginal utility of
+route time/distance. Unlike `alternative_specific_constant`, these aren't sign-free: a longer
+route should never look more attractive, so both are forced negative
+(`-lognormvariate(0.0, 1.0)`) -- a positive draw would be a real modeling error, not just an
+unusual value. No real-world magnitude convention exists for them the way BPR's parameters
+have one, since route time/distance are in this pipeline's own arbitrary units, so only the
+sign is constrained, not the magnitude.
+
+`pcu` (passenger-car-unit equivalent) stays a plain unassuming positive value
+(`lognormvariate(0.0, 1.0)`) -- median 1.0 already coincides with the real PCU baseline for a
+car, and there's no way to tie it more precisely to `vehicle_type` here since those labels
+are synthetic, not real categories with known PCU multipliers.
+
+Alternatively, hand it a `vehicles.csv` that already has `vehicle` filled in (real vehicle
+names are welcome) with the other six columns left entirely empty, and it fills all six for
+exactly those vehicles, in that order -- checked jointly, since they're synthesized together,
+so some columns filled while others aren't is rejected rather than partially accepted. A file
+with those six columns already populated anywhere is left alone and the command is a no-op.
+Passing `--sigma` against a file that already exists throws either way (shape-only or
+complete): `--sigma` only ever controls count invention, and a file that already has a
+vehicle list has nothing left for it to control.
