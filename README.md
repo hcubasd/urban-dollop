@@ -751,3 +751,43 @@ Like `synth agents` and `synth desire-lines`, this invents no shape, so `--sigma
 unconditionally, and the command is a no-op once `network_loads.csv` already exists -- the
 draws here are genuinely random, so a re-run would silently produce a different assignment
 rather than recomputing the same one.
+
+## `synth copert-v-coefficients`
+
+One row per (`vehicle_type`, `pollutant`, `gradient_bin`, `payload_bin`) key, written to
+`copert_v_coefficients.csv`: that key plus the COPERT V hot-emission-function coefficients
+`alpha` through `eta` and a reduction factor `rf`. Self-contained -- never reads any other
+file, including `vehicles.csv`; `vehicle_type` is matched up against it later, by whichever
+command combines them.
+
+| vehicle_type | pollutant | gradient_bin | payload_bin | alpha | beta | gamma | delta | epsilon | zeta | eta | rf |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| vehicle_type_1 | pollutant_1 | -6 | 0 | 1.502 | 1.358 | -0.753 | -0.358 | 0.891 | 0.017 | -1.565 | 0.157 |
+| vehicle_type_1 | pollutant_1 | -6 | 50 | -0.450 | -0.061 | 0.854 | 0.908 | -0.698 | 0.550 | -0.183 | 0.829 |
+| vehicle_type_1 | pollutant_1 | -4 | 0 | 0.643 | -0.650 | 0.252 | 1.285 | -0.188 | -1.771 | 0.958 | 0.462 |
+
+### Synthesis
+
+`gradient_bin` (`-6, -4, -2, 0, 2, 4, 6`) and `payload_bin` (`0, 50, 100`) are fixed COPERT V
+categories, not something `--sigma` or a caller invents -- the same status as `vehicles.py`'s
+BPR defaults. `random_count(sigma)` is the only place `--sigma` acts, for `n_vehicle_types` and
+`n_pollutants` independently; on full synthesis, their full cross product against the fixed
+bins is what gets a row each.
+
+`alpha` through `eta` are the fitted coefficients of COPERT's hot-emission speed function.
+Unlike `vehicles.csv`'s `bpr_alpha`/`bpr_beta`, there's no single real-world default to anchor
+to: COPERT's published values are indexed by real vehicle/pollutant/Euro-class categories, and
+`vehicle_type`/`pollutant` here are synthetic labels, not entries in that taxonomy, so there's
+no principled real coefficient set to center on. They get the same sign-free `Normal(0, 1)`
+treatment as `alternative_specific_constant`. `rf`, the reduction factor, is conventionally
+bounded to `[0, 1]`, so it's a plain uniform draw.
+
+Alternatively, hand it a `copert_v_coefficients.csv` that already has all four key columns
+filled in (real categories are welcome) with the eight coefficient columns left entirely
+empty, and it fills them for exactly those rows, in that order -- checked jointly, so some
+coefficients filled while others aren't is rejected rather than partially accepted. Given rows
+don't need to cover the full bin grid, same reasoning as `vehicle-velocities`' pairs. A file
+with those eight columns already populated anywhere is left alone and the command is a no-op.
+Passing `--sigma` against a file that already exists throws either way (shape-only or
+complete): `--sigma` only ever controls count invention, and a file that already has its key
+columns has nothing left for it to control.

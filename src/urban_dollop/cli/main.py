@@ -137,6 +137,10 @@ def main():
         from urban_dollop.cli.synth_network_loads import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "copert-v-coefficients"]:
+        from urban_dollop.cli.synth_copert_v_coefficients import run
+
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
