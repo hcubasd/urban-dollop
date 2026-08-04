@@ -556,3 +556,28 @@ the command is a no-op; whichever state the file is in, every non-empty `capacit
 whole number. Passing `--sigma` against a file that already exists throws either way
 (shape-only or complete): `--sigma` only ever controls count invention, and a file that
 already has vehicle/resource pairs has nothing left for it to control.
+
+## `synth road-capacities`
+
+One row per road type, written to `road_capacities.csv`: `road_type` and a `capacity`.
+Self-contained -- never reads any other file.
+
+| road_type | capacity |
+|---|---|
+| road_type_1 | 2.001 |
+| road_type_2 | 0.667 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for the road type count. `capacity`
+is a value, not a count, and gets the same deliberately unassuming `lognormvariate(0.0, 1.0)`
+treatment as `vehicle-velocities`' `velocity` -- a plain continuous PCU (passenger-car-unit)
+figure, no whole-number constraint the way `vehicle-capacities`' `capacity` had.
+
+Alternatively, hand it a `road_capacities.csv` that already has `road_type` filled in (real
+road types are welcome) with `capacity` left entirely empty, and it fills capacities for
+exactly those road types, in that order -- the count comes from the shape you gave it, not
+from `--sigma`. A file with `capacity` already populated anywhere is left alone and the
+command is a no-op. Passing `--sigma` against a file that already exists throws either way
+(shape-only or complete): `--sigma` only ever controls count invention, and a file that
+already has road type labels has nothing left for it to control.
