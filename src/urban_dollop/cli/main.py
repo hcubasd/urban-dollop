@@ -125,6 +125,10 @@ def main():
         from urban_dollop.cli.synth_road_capacities import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "alternative-specific-constants"]:
+        from urban_dollop.cli.synth_alternative_specific_constants import run
+
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)

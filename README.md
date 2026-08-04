@@ -581,3 +581,36 @@ from `--sigma`. A file with `capacity` already populated anywhere is left alone 
 command is a no-op. Passing `--sigma` against a file that already exists throws either way
 (shape-only or complete): `--sigma` only ever controls count invention, and a file that
 already has road type labels has nothing left for it to control.
+
+## `synth alternative-specific-constants`
+
+One row per (`vehicle`, `resource`) pair, written to `alternative_specific_constants.csv`:
+`vehicle`, `resource`, and an `alternative_specific_constant`. Self-contained -- never reads
+any other file.
+
+| vehicle | resource | alternative_specific_constant |
+|---|---|---|
+| vehicle_1 | resource_1 | -0.368 |
+| vehicle_1 | resource_2 | 1.569 |
+| vehicle_2 | resource_1 | 0.766 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for `n_vehicles` and `n_resources`
+independently -- their full cross product is what gets a row each.
+`alternative_specific_constant` is the discrete-choice model's ASC: the baseline utility of
+choosing this vehicle for this resource before time/distance are factored in. Unlike
+`vehicle-capacities`' `capacity`, it's genuinely unrestricted in sign by definition -- one
+alternative is typically normalized to zero and the rest float above or below it -- so it
+gets the same `Normal(0, 1)` treatment as every other effect coefficient in this pipeline
+(`supply-effects` and friends), fixed regardless of sigma since it's a value, not a count.
+
+Alternatively, hand it an `alternative_specific_constants.csv` that already has
+`vehicle`/`resource` filled in (real vehicles and resources are welcome) with
+`alternative_specific_constant` left entirely empty, and it fills constants for exactly those
+pairs, in that order -- the shape comes from what you gave it, not from `--sigma`. Given pairs
+don't need to be a full cross product, same reasoning as `vehicle-velocities`. A file with
+`alternative_specific_constant` already populated anywhere is left alone and the command is a
+no-op. Passing `--sigma` against a file that already exists throws either way (shape-only or
+complete): `--sigma` only ever controls count invention, and a file that already has
+vehicle/resource pairs has nothing left for it to control.
