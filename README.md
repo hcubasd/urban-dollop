@@ -199,6 +199,22 @@ get that column set for that row.
 Nothing gets rounded or collapsed here -- this is the actual distribution individual agents
 get sampled from later, so it has to stay a distribution.
 
+`supply.csv` / `demand.csv`:
+
+| zone_id | stratum_1 | resource_1 | resource_2 |
+|---|---|---|---|
+| 1 | value_1 | 12 | 5 |
+| 1 | value_2 | 8 | (empty) |
+| 2 | value_1 | 3 | 1 |
+
+`capacities.csv` / `needs.csv`:
+
+| zone_id | stratum_1 | resource | resource_level | probability |
+|---|---|---|---|---|
+| 1 | value_1 | resource_1 | 0 | 0.412 |
+| 1 | value_1 | resource_1 | 2 | 0.588 |
+| 1 | value_1 | resource_2 | 4 | 1.000 |
+
 ### Synthesis
 
 Deterministic, not random: the same effects + thresholds always produce the same output.
@@ -233,6 +249,12 @@ omitted cell), and capacities and needs each need an actual distribution. An age
 single coherent record needing a valid draw for every usable resource at once, so a resource
 missing from even one of the four isn't included for that stratum at all -- there'd be no
 way to give an agent a well-defined value for it.
+
+| agent_id | zone_id | stratum_1 | resource_1_capacity | resource_1_need | geometry |
+|---|---|---|---|---|---|
+| 1 | 1 | value_1 | 6 | 0 | POINT (0.42 0.71) |
+| 2 | 1 | value_1 | 0 | 4 | POINT (0.38 0.65) |
+| 3 | 2 | value_2 | 3 | 0 | POINT (0.81 0.10) |
 
 ### Synthesis
 
@@ -275,6 +297,12 @@ that survived Layer 3 (found the same way Layer 3 finds them -- matching
 `{resource}_capacity`/`{resource}_need` column pairs, no other file read). There is no
 `batch_sizes.csv` anymore -- see Synthesis below for why.
 
+| resource | quantity | geometry |
+|---|---|---|
+| resource_1 | 4 | LINESTRING (0.42 0.71, 0.81 0.10) |
+| resource_1 | 2 | LINESTRING (0.38 0.65, 0.90 0.22) |
+| resource_2 | 1 | LINESTRING (0.81 0.10, 0.42 0.71) |
+
 ### Synthesis
 
 For each resource independently: the *currently* more-constrained side (whichever has less
@@ -310,6 +338,12 @@ A GeoDataFrame of road links over the unit square, written to `network.gpkg`: `l
 `grade`, `road_type`, `oneway`, and a 2-point `LineString`. Self-contained -- reads nothing,
 invents everything from scratch.
 
+| link_id | grade | road_type | oneway | geometry |
+|---|---|---|---|---|
+| 0 | 2.145 | road_type_1 | True | LINESTRING (0.12 0.88, 0.53 0.41) |
+| 1 | -4.732 | road_type_2 | False | LINESTRING (0.53 0.41, 0.77 0.09) |
+| 2 | 0.318 | road_type_1 | True | LINESTRING (0.77 0.09, 0.12 0.88) |
+
 ### Synthesis
 
 Points are scattered uniformly over the unit square and connected by Delaunay triangulation,
@@ -341,6 +375,12 @@ One row per synthesized time interval, written to `time_intervals.csv`: a sequen
 (`interval_1`, `interval_2`, ...) and a `duration`. Self-contained -- reads nothing, invents
 everything from scratch.
 
+| time_interval | duration |
+|---|---|
+| interval_1 | 1.158 |
+| interval_2 | 2.030 |
+| interval_3 | 0.487 |
+
 ### Synthesis
 
 `random_count(sigma)` is the only place `--sigma` acts, for the interval count. `duration` is
@@ -362,6 +402,12 @@ One row per (`resource`, `time_interval`) a resource departs in, written to `dep
 `resource`, `time_interval`, and `probability` -- each resource's probabilities sum to 1
 across the intervals it uses. Self-contained -- invents its own resources and its own
 interval labels, independent of `time_intervals.csv` or anything else.
+
+| resource | time_interval | probability |
+|---|---|---|
+| resource_1 | interval_1 | 0.214 |
+| resource_1 | interval_3 | 0.786 |
+| resource_2 | interval_2 | 1.000 |
 
 ### Synthesis
 
