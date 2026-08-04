@@ -429,3 +429,26 @@ each interval, in the same sorted order the intervals were drawn in.
 
 Same leaf contract as `synth time-intervals`: `--sigma` throws if passed while
 `departures.csv` already exists, and the command is a no-op on an existing file otherwise.
+
+## `synth dwell-times`
+
+One row per synthesized resource, written to `dwell_times.csv`: `dwell_time` (how long a
+vehicle dwells before its return trip) and `load_pct` (the fraction of load carried back).
+Self-contained -- invents its own resources.
+
+| resource | dwell_time | load_pct |
+|---|---|---|
+| resource_1 | 0.915 | 0.329 |
+| resource_2 | 2.481 | 0.774 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for the resource count. `dwell_time`
+and `load_pct` are both values, not counts, and stay fixed regardless of sigma: `dwell_time`
+gets the same deliberately unassuming `lognormvariate(0.0, 1.0)` treatment as
+`time-intervals`' `duration` (a positive time span with no canonical shape to preserve), and
+`load_pct` is already the canonical choice for "a fraction in `[0, 1)`" as plain
+`random.random()`, nothing legacy to migrate there.
+
+Same leaf contract as `synth departures`: `--sigma` throws if passed while
+`dwell_times.csv` already exists, and the command is a no-op on an existing file otherwise.
