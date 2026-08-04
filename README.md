@@ -16,7 +16,6 @@ flowchart LR
     capacities --> agents
     needs --> agents
     agents --> desire_lines[desire-lines]
-    batch_sizes[batch-sizes] --> desire_lines
     desire_lines --> network_loads
     departures[departures] --> network_loads
     time_intervals[time-intervals] --> network_loads
@@ -260,3 +259,47 @@ command is a no-op once `agents.gpkg` already exists -- even more important here
 the pure combiners, since agent synthesis has genuine randomness: an accidental re-run
 wouldn't just redundantly recompute the same file, it would silently replace the whole agent
 population with a different random draw.
+
+## `synth desire-lines`
+
+Combines pairs of agents from `agents.gpkg` into `desire_lines.gpkg`: one row per resource
+transaction between two agents -- `resource`, `quantity`, and a 2-point `LineString`
+directed from the provider (capacity side) to the consumer (need side). No agent
+identifiers -- nothing downstream needs to trace a line back to the agents that produced
+it. The same two agents can produce more than one line, one per resource they trade, or even
+more than one line for the *same* resource across separate draws -- each transaction is its
+own row regardless of who's involved.
+
+`agents.gpkg` alone has everything needed: capacity, need, and location, for every resource
+that survived Layer 3 (found the same way Layer 3 finds them -- matching
+`{resource}_capacity`/`{resource}_need` column pairs, no other file read). There is no
+`batch_sizes.csv` anymore -- see Synthesis below for why.
+
+### Synthesis
+
+For each resource independently: the *currently* more-constrained side (whichever has less
+total remaining across all agents, capacity or need) picks a primary agent weighted by their
+own remaining value; the other side picks a secondary agent weighted by their remaining
+value times a distance decay from the primary agent's location (`logistic(-distance)` --
+the same sigmoid used for the ordered-logit models elsewhere in this pipeline, reused here
+purely as a spatial gravity term, not a probability -- closer agents are more likely
+paired). Self-pairing is excluded by agent id, not by coincidental location. The transacted quantity is `min` of the two specific agents' remaining values on
+their respective sides -- that's the batch size now, derived from the actual pair instead of
+sampled from an independent distribution, which is why `batch_sizes.csv` is gone: whichever
+agent runs out first *is* the batch size for that transaction. Both agents' remaining values
+are depleted by that quantity, and every quantity is recomputed -- which side is
+constrained, and every candidate's weight -- fresh on every iteration, since depleting one
+pair changes the totals for everyone.
+
+The loop for a resource stops once either total (recomputed each pass) hits zero. Unlike
+`synth agents`' stopping condition, no separate "made zero progress" check is needed here:
+weight *is* the remaining value directly (not a probability of drawing a value that happens
+to be zero), so a zero-remaining agent has zero weight and can never be selected, so every
+drawn pair has strictly positive remaining on both sides and every iteration depletes a
+real, positive amount. Termination is guaranteed by construction.
+
+Same deterministic-consumer-with-real-randomness contract as `synth agents`: `--sigma`
+throws unconditionally (nothing here is an invented shape either), and the command is a
+no-op once `desire_lines.gpkg` already exists, for the same reason -- the pairing draws are
+genuinely random, so a re-run would silently produce a different set of lines rather than
+recomputing the same ones.

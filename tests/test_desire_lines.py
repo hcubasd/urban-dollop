@@ -1,0 +1,71 @@
+from shapely.geometry import Point
+
+from urban_dollop.synth.desire_lines import desire_lines
+
+
+def test_empty_agents():
+    assert desire_lines([]) == []
+
+
+def test_no_matching_capacity_need_column_pairs():
+    agents = [{"agent_id": 1, "geometry": Point(0, 0), "grains_capacity": 3}]
+    assert desire_lines(agents) == []
+
+
+def test_exhausts_the_smaller_total_and_stops():
+    agents = [
+        {"agent_id": 1, "geometry": Point(0.1, 0.1), "grains_capacity": 8, "grains_need": 0},
+        {"agent_id": 2, "geometry": Point(0.9, 0.9), "grains_capacity": 0, "grains_need": 5},
+    ]
+    rows = desire_lines(agents)
+    assert sum(r["quantity"] for r in rows) == 5
+    assert all(r["resource"] == "grains" for r in rows)
+
+
+def test_line_direction_is_provider_to_consumer():
+    agents = [
+        {"agent_id": 1, "geometry": Point(0.1, 0.1), "grains_capacity": 5, "grains_need": 0},
+        {"agent_id": 2, "geometry": Point(0.9, 0.9), "grains_capacity": 0, "grains_need": 5},
+    ]
+    rows = desire_lines(agents)
+    assert len(rows) == 1
+    start, end = list(rows[0]["geometry"].coords)
+    assert start == (0.1, 0.1)
+    assert end == (0.9, 0.9)
+
+
+def test_single_agent_cannot_pair_with_itself():
+    agents = [{"agent_id": 1, "geometry": Point(0.1, 0.1), "grains_capacity": 5, "grains_need": 5}]
+    assert desire_lines(agents) == []
+
+
+def test_ragged_agents_with_nan_for_untracked_resources_are_excluded_not_crashed():
+    nan = float("nan")
+    agents = [
+        {"agent_id": 1, "geometry": Point(0.1, 0.1), "grains_capacity": 5, "grains_need": 0, "parcels_capacity": nan, "parcels_need": nan},
+        {"agent_id": 2, "geometry": Point(0.2, 0.2), "grains_capacity": 0, "grains_need": 5, "parcels_capacity": nan, "parcels_need": nan},
+        {"agent_id": 3, "geometry": Point(0.8, 0.8), "grains_capacity": nan, "grains_need": nan, "parcels_capacity": 3, "parcels_need": 0},
+        {"agent_id": 4, "geometry": Point(0.9, 0.9), "grains_capacity": nan, "grains_need": nan, "parcels_capacity": 0, "parcels_need": 3},
+    ]
+    rows = desire_lines(agents)
+    resources_transacted = {r["resource"]: r["quantity"] for r in rows}
+    assert resources_transacted == {"grains": 5, "parcels": 3}
+
+
+def test_multiple_resources_between_same_pair_are_separate_rows():
+    agents = [
+        {"agent_id": 1, "geometry": Point(0.1, 0.1), "grains_capacity": 3, "grains_need": 0, "parcels_capacity": 2, "parcels_need": 0},
+        {"agent_id": 2, "geometry": Point(0.9, 0.9), "grains_capacity": 0, "grains_need": 3, "parcels_capacity": 0, "parcels_need": 2},
+    ]
+    rows = desire_lines(agents)
+    assert len(rows) == 2
+    assert {r["resource"] for r in rows} == {"grains", "parcels"}
+
+
+def test_never_produces_zero_quantity_rows():
+    agents = [
+        {"agent_id": i, "geometry": Point(0.01 * i, 0.01 * i), "grains_capacity": (i % 3), "grains_need": ((i + 1) % 3)}
+        for i in range(1, 15)
+    ]
+    rows = desire_lines(agents)
+    assert all(r["quantity"] > 0 for r in rows)

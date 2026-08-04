@@ -1,93 +1,91 @@
-import random
-
-import geopandas as gpd
-import pandas as pd
 from shapely.geometry import LineString
 
 from urban_dollop.helpers.logistic import logistic
+from urban_dollop.helpers.weighted_choice import weighted_choice
 
 
-def _draw_batch(pairs):
-    total = sum(p for _, p in pairs)
-    u = random.random()
-    cumulative = 0.0
-    for size, prob in pairs:
-        cumulative += prob / total
-        if u <= cumulative:
-            return size
-    return pairs[-1][0]
+def _resource_names(agent_rows):
+    if not agent_rows:
+        return []
+    cols = agent_rows[0].keys()
+    capacities = {c[: -len("_capacity")] for c in cols if c.endswith("_capacity")}
+    needs = {c[: -len("_need")] for c in cols if c.endswith("_need")}
+    return sorted(capacities & needs)
 
 
-def _weighted_choice(weights):
-    total = sum(weights)
-    u = random.random() * total
-    cumulative = 0.0
-    for i, w in enumerate(weights):
-        cumulative += w
-        if u <= cumulative:
-            return i
-    return len(weights) - 1
+def desire_lines(agent_rows):
+    """One row per resource transaction between two agents: resource,
+    quantity, and a 2-point geometry from provider to consumer. No agent
+    identifiers -- nothing downstream needs to trace a line back to the
+    agents that produced it, so they're not carried into the output.
 
+    For each resource independently, agents.gpkg already carries
+    everything needed (capacity, need, location) -- no batch_sizes.csv,
+    no separate distribution to draw from. Repeatedly: the *currently*
+    more-constrained side (whichever has less total remaining -- capacity
+    or need -- rechecked every iteration, since depleting one pair changes
+    both totals) picks a primary agent weighted by their own remaining
+    value; the other side picks a secondary agent weighted by their
+    remaining value times a distance decay from the primary agent (a
+    gravity-model pairing -- closer agents are more likely matched,
+    self-pairing excluded by agent_id). The transacted quantity is
+    whichever of the two specific agents' remaining values is smaller --
+    that's the "batch size" now, derived from the actual pair instead of
+    sampled independently, and it's why batch_sizes.csv is gone. Both
+    agents' remaining values are depleted by that quantity, and the loop
+    continues until either total (recomputed fresh each pass) hits zero.
 
-def desire_lines(agents_gdf, batch_sizes_df):
-    supply_cols = [c for c in agents_gdf.columns if c.endswith("_supply") and pd.api.types.is_integer_dtype(agents_gdf[c])]
-    resources = [c[:-len("_supply")] for c in supply_cols]
-    resources = [r for r in resources if f"{r}_demand" in agents_gdf.columns]
+    Termination is guaranteed by construction, not a secondary check:
+    weight *is* the remaining value, so a zero-remaining agent has zero
+    weight and can never be drawn, so every drawn pair has strictly
+    positive remaining on both sides and every iteration depletes a real,
+    positive amount.
+    """
+    resources = _resource_names(agent_rows)
+    if not agent_rows or not resources:
+        return []
 
-    batch_dist = {}
-    for resource, group in batch_sizes_df.groupby("resource"):
-        batch_dist[resource] = sorted(zip(group["batch_size"].tolist(), group["probability"].tolist()))
-
-    resources = [r for r in resources if r in batch_dist]
-
-    all_supply_cols = [f"{r}_supply" for r in resources]
-    all_demand_cols = [f"{r}_demand" for r in resources]
+    remaining = {
+        row["agent_id"]: {
+            resource: {"capacity": row[f"{resource}_capacity"], "need": row[f"{resource}_need"]}
+            for resource in resources
+        }
+        for row in agent_rows
+    }
+    points = {row["agent_id"]: row["geometry"] for row in agent_rows}
 
     rows = []
     for resource in resources:
-        supply_col = f"{resource}_supply"
-        demand_col = f"{resource}_demand"
-
-        supply_agents = agents_gdf[agents_gdf[supply_col] > 0].reset_index(drop=True)
-        demand_agents = agents_gdf[agents_gdf[demand_col] > 0].reset_index(drop=True)
-
-        if supply_agents.empty or demand_agents.empty:
-            continue
-
-        total_supply = int(supply_agents[supply_col].sum())
-        total_demand = int(demand_agents[demand_col].sum())
-        remaining = min(total_supply, total_demand)
-
-        supply_weights = supply_agents[supply_col].tolist()
-        demand_weights_base = demand_agents[demand_col].tolist()
-        supply_points = supply_agents.geometry.tolist()
-        demand_points = demand_agents.geometry.tolist()
-
-        while remaining > 0:
-            s_idx = _weighted_choice(supply_weights)
-            s_point = supply_points[s_idx]
-
-            decay = [
-                0.0 if d.equals(s_point) else w * logistic(-s_point.distance(d))
-                for w, d in zip(demand_weights_base, demand_points)
-            ]
-            if sum(decay) == 0.0:
+        while True:
+            capacity_side = [(aid, r[resource]["capacity"]) for aid, r in remaining.items() if r[resource]["capacity"] > 0]
+            need_side = [(aid, r[resource]["need"]) for aid, r in remaining.items() if r[resource]["need"] > 0]
+            total_capacity = sum(w for _, w in capacity_side)
+            total_need = sum(w for _, w in need_side)
+            if total_capacity == 0 or total_need == 0:
                 break
-            d_idx = _weighted_choice(decay)
-            d_point = demand_points[d_idx]
 
-            batch = min(_draw_batch(batch_dist[resource]), remaining)
+            limiting = capacity_side if total_capacity <= total_need else need_side
+            primary_id = weighted_choice([aid for aid, _ in limiting], [w for _, w in limiting])
 
-            row = {c: 0 for c in all_supply_cols + all_demand_cols}
-            row[supply_col] = batch
-            row[demand_col] = batch
-            row["geometry"] = LineString([s_point.coords[0], d_point.coords[0]])
-            rows.append(row)
+            other_side = need_side if limiting is capacity_side else capacity_side
+            candidates = [(aid, w) for aid, w in other_side if aid != primary_id]
+            weights = [w * logistic(-points[primary_id].distance(points[aid])) for aid, w in candidates]
+            if sum(weights) == 0:
+                break
+            secondary_id = weighted_choice([aid for aid, _ in candidates], weights)
 
-            remaining -= batch
+            if limiting is capacity_side:
+                provider_id, consumer_id = primary_id, secondary_id
+            else:
+                provider_id, consumer_id = secondary_id, primary_id
 
-    if not rows:
-        cols = all_supply_cols + all_demand_cols + ["geometry"]
-        return gpd.GeoDataFrame(columns=cols, crs=None)
+            quantity = min(remaining[provider_id][resource]["capacity"], remaining[consumer_id][resource]["need"])
+            remaining[provider_id][resource]["capacity"] -= quantity
+            remaining[consumer_id][resource]["need"] -= quantity
 
-    return gpd.GeoDataFrame(rows, crs=None)
+            rows.append({
+                "resource": resource,
+                "quantity": quantity,
+                "geometry": LineString([points[provider_id].coords[0], points[consumer_id].coords[0]]),
+            })
+    return rows

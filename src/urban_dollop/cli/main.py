@@ -93,6 +93,10 @@ def main():
         from urban_dollop.cli.synth_agents import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "desire-lines"]:
+        from urban_dollop.cli.synth_desire_lines import run
+
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
