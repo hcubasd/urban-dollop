@@ -791,3 +791,35 @@ with those eight columns already populated anywhere is left alone and the comman
 Passing `--sigma` against a file that already exists throws either way (shape-only or
 complete): `--sigma` only ever controls count invention, and a file that already has its key
 columns has nothing left for it to control.
+
+## `synth emission-factors`
+
+One row per (`vehicle_type`, `pollutant`) pair, written to `emission_factors.csv`:
+`vehicle_type`, `pollutant`, and an `emission_factor`. Self-contained -- never reads any other
+file, same reasoning as `copert-v-coefficients`.
+
+| vehicle_type | pollutant | emission_factor |
+|---|---|---|
+| vehicle_type_1 | pollutant_1 | 0.227 |
+| vehicle_type_1 | pollutant_2 | 1.845 |
+| vehicle_type_2 | pollutant_1 | 0.612 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for `n_vehicle_types` and `n_pollutants`
+independently -- their full cross product is what gets a row each. Deliberately **not**
+stratified by `gradient_bin`/`payload_bin` the way `copert_v_coefficients` is: this models
+COPERT V's non-exhaust emissions (brake wear, tire wear, road surface wear, resuspension),
+which per COPERT's own methodology aren't gradient- or payload-dependent -- they scale with
+speed and vehicle weight instead, which is a `network-emissions` concern (via `network_loads`'
+velocity), not something this file's shape needs to carry. `emission_factor` gets the same
+unassuming `lognormvariate(0.0, 1.0)` treatment as `vehicle-velocities`' `velocity`.
+
+Alternatively, hand it an `emission_factors.csv` that already has `vehicle_type`/`pollutant`
+filled in (real categories are welcome) with `emission_factor` left entirely empty, and it
+fills factors for exactly those pairs, in that order -- the shape comes from what you gave it,
+not from `--sigma`. Given pairs don't need to be a full cross product, same reasoning as
+`vehicle-velocities`. A file with `emission_factor` already populated anywhere is left alone
+and the command is a no-op. Passing `--sigma` against a file that already exists throws either
+way (shape-only or complete): `--sigma` only ever controls count invention, and a file that
+already has vehicle_type/pollutant pairs has nothing left for it to control.
