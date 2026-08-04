@@ -355,3 +355,31 @@ written `interval_1`, `interval_2`, ... in that order and never shuffled.
 
 Same leaf contract as `synth network`: `--sigma` throws if passed while `time_intervals.csv`
 already exists, and the command is a no-op on an existing file otherwise.
+
+## `synth departures`
+
+One row per (`resource`, `time_interval`) a resource departs in, written to `departures.csv`:
+`resource`, `time_interval`, and `probability` -- each resource's probabilities sum to 1
+across the intervals it uses. Self-contained -- invents its own resources and its own
+interval labels, independent of `time_intervals.csv` or anything else.
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, twice: once for `n_resources`, and
+once for the size of a shared time-slot menu (`interval_1`, `interval_2`, ...). That menu is
+a property of the simulated period itself, decided once, not derived from any one resource's
+needs -- unlike the old version of this file, which sized the menu after the fact as the
+max of independently-drawn per-resource counts. Each resource then draws a `random_subset` of
+that menu -- bounded selection from an already-fixed set, not new invention, so deliberately
+not sigma-driven either, the same "doesn't necessarily participate in everything" pattern
+`random_strata` uses for resource/stratum participation.
+
+Within a resource's chosen intervals, probabilities come from the same canonical ordered
+logit used throughout this pipeline (McCullagh 1980): a single `beta` and
+`len(intervals) - 1` sorted cutpoints (`mus`), both `Normal(0, 1)` and fixed regardless of
+sigma, since they're values, not counts. `logistic(mu - beta)` turns the cutpoints into
+cumulative probabilities from 0 to 1; consecutive differences are the probability mass for
+each interval, in the same sorted order the intervals were drawn in.
+
+Same leaf contract as `synth time-intervals`: `--sigma` throws if passed while
+`departures.csv` already exists, and the command is a no-op on an existing file otherwise.
