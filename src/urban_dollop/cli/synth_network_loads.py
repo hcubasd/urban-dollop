@@ -1,3 +1,4 @@
+import os
 import sys
 
 import geopandas as gpd
@@ -5,87 +6,65 @@ import pandas as pd
 
 from urban_dollop.synth.network_loads import network_loads
 
+_REQUIRED = {
+    "network.gpkg": ("link_id", "grade", "road_type", "oneway"),
+    "desire_lines.gpkg": ("resource", "quantity", "origin_agent_id", "destination_zone_id"),
+    "departures.csv": ("resource", "time_interval", "probability"),
+    "time_intervals.csv": ("time_interval", "duration"),
+    "dwell_times.csv": ("resource", "dwell_time", "load_pct"),
+    "vehicles.csv": ("vehicle", "bpr_alpha", "bpr_beta", "time_coefficient", "distance_coefficient", "pcu"),
+    "vehicle_velocities.csv": ("vehicle", "road_type", "velocity"),
+    "vehicle_capacities.csv": ("vehicle", "resource", "capacity"),
+    "road_capacities.csv": ("road_type", "capacity"),
+    "alternative_specific_constants.csv": ("vehicle", "resource", "alternative_specific_constant"),
+}
 
-def run():
-    try:
-        network_gdf = gpd.read_file("network.gpkg")
-    except Exception as e:
-        print(f"error reading network.gpkg: {e}", file=sys.stderr)
+_OUTPUT_COLUMNS = ["link_id", "time_interval", "vehicle", "vehicle_count", "velocity", "load_pct"]
+
+
+def _validate(frame, path):
+    for column in _REQUIRED[path]:
+        if column not in frame.columns:
+            raise ValueError(f"{path}: missing '{column}' column")
+
+
+def run(sigma=1.0, sigma_given=False):
+    if sigma_given:
+        print(
+            "network_loads.csv: synth network-loads combines existing data, it invents nothing -- --sigma has nothing to control",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if os.path.exists("network_loads.csv"):
+        return
+
+    missing = [path for path in _REQUIRED if not os.path.exists(path)]
+    if missing:
+        print(f"not ready yet -- synthesize first: {', '.join(sorted(missing))}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        desire_lines_gdf = gpd.read_file("desire_lines.gpkg")
-    except Exception as e:
-        print(f"error reading desire_lines.gpkg: {e}", file=sys.stderr)
-        sys.exit(1)
+    frames = {}
+    for path in _REQUIRED:
+        frames[path] = gpd.read_file(path) if path.endswith(".gpkg") else pd.read_csv(path)
 
     try:
-        departures_df = pd.read_csv("departures.csv")
-    except Exception as e:
-        print(f"error reading departures.csv: {e}", file=sys.stderr)
+        for path, frame in frames.items():
+            _validate(frame, path)
+    except ValueError as e:
+        print(e, file=sys.stderr)
         sys.exit(1)
-
-    try:
-        time_intervals_df = pd.read_csv("time_intervals.csv")
-    except Exception as e:
-        print(f"error reading time_intervals.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        dwell_times_df = pd.read_csv("dwell_times.csv")
-    except Exception as e:
-        print(f"error reading dwell_times.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        vehicles_df = pd.read_csv("vehicles.csv")
-    except Exception as e:
-        print(f"error reading vehicles.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        vehicle_velocities_df = pd.read_csv("vehicle_velocities.csv")
-    except Exception as e:
-        print(f"error reading vehicle_velocities.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        vehicle_capacities_df = pd.read_csv("vehicle_capacities.csv")
-    except Exception as e:
-        print(f"error reading vehicle_capacities.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        road_capacities_df = pd.read_csv("road_capacities.csv")
-    except Exception as e:
-        print(f"error reading road_capacities.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        asc_df = pd.read_csv("alternative_specific_constants.csv")
-    except Exception as e:
-        print(f"error reading alternative_specific_constants.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    for col in ("grade", "road_type", "direction"):
-        if col not in network_gdf.columns:
-            print(f"network.gpkg missing column: {col}", file=sys.stderr)
-            sys.exit(1)
-
-    for col in ("resource", "time_interval", "probability"):
-        if col not in departures_df.columns:
-            print(f"departures.csv missing column: {col}", file=sys.stderr)
-            sys.exit(1)
-
-    for col in ("time_interval", "duration"):
-        if col not in time_intervals_df.columns:
-            print(f"time_intervals.csv missing column: {col}", file=sys.stderr)
-            sys.exit(1)
 
     rows = network_loads(
-        network_gdf, desire_lines_gdf, departures_df, time_intervals_df,
-        dwell_times_df, vehicles_df, vehicle_velocities_df,
-        vehicle_capacities_df, road_capacities_df, asc_df,
+        frames["network.gpkg"].to_dict("records"),
+        frames["desire_lines.gpkg"].to_dict("records"),
+        frames["departures.csv"].to_dict("records"),
+        frames["time_intervals.csv"].to_dict("records"),
+        frames["dwell_times.csv"].to_dict("records"),
+        frames["vehicles.csv"].to_dict("records"),
+        frames["vehicle_velocities.csv"].to_dict("records"),
+        frames["vehicle_capacities.csv"].to_dict("records"),
+        frames["road_capacities.csv"].to_dict("records"),
+        frames["alternative_specific_constants.csv"].to_dict("records"),
     )
 
-    pd.DataFrame(rows).to_csv("network_loads.csv", index=False)
+    pd.DataFrame(rows, columns=_OUTPUT_COLUMNS).to_csv("network_loads.csv", index=False)

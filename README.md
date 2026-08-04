@@ -290,23 +290,30 @@ population with a different random draw.
 ## `synth desire-lines`
 
 Combines pairs of agents from `agents.gpkg` into `desire_lines.gpkg`: one row per resource
-transaction between two agents -- `resource`, `quantity`, and a 2-point `LineString`
-directed from the provider (capacity side) to the consumer (need side). No agent
-identifiers -- nothing downstream needs to trace a line back to the agents that produced
-it. The same two agents can produce more than one line, one per resource they trade, or even
-more than one line for the *same* resource across separate draws -- each transaction is its
-own row regardless of who's involved.
+transaction between two agents -- `resource`, `quantity`, `origin_agent_id`,
+`destination_zone_id`, and a 2-point `LineString` directed from the provider (capacity side)
+to the consumer (need side). The same two agents can produce more than one line, one per
+resource they trade, or even more than one line for the *same* resource across separate
+draws -- each transaction is its own row regardless of who's involved.
 
-`agents.gpkg` alone has everything needed: capacity, need, and location, for every resource
-that survived Layer 3 (found the same way Layer 3 finds them -- matching
+`origin_agent_id` and `destination_zone_id` are what let `network-loads` consolidate
+transactions into depot-to-zone shipments, so a vehicle can be filled with deliveries bound
+for the same zone instead of running one near-empty trip per transaction. Both come straight
+off the paired agent records during pairing -- `agents.gpkg` already carries `zone_id` as one
+of its stratum dimensions, so no downstream spatial join against `zones.gpkg` is needed. The
+consumer's own agent id is deliberately not carried: the destination that matters downstream
+is the zone, and the consumer's exact location is already in the line's end point.
+
+`agents.gpkg` alone has everything needed: capacity, need, zone, and location, for every
+resource that survived Layer 3 (found the same way Layer 3 finds them -- matching
 `{resource}_capacity`/`{resource}_need` column pairs, no other file read). There is no
 `batch_sizes.csv` anymore -- see Synthesis below for why.
 
-| resource | quantity | geometry |
-|---|---|---|
-| resource_1 | 4 | LINESTRING (0.42 0.71, 0.81 0.10) |
-| resource_1 | 2 | LINESTRING (0.38 0.65, 0.90 0.22) |
-| resource_2 | 1 | LINESTRING (0.81 0.10, 0.42 0.71) |
+| resource | quantity | origin_agent_id | destination_zone_id | geometry |
+|---|---|---|---|---|
+| resource_1 | 4 | 3 | 2 | LINESTRING (0.42 0.71, 0.81 0.10) |
+| resource_1 | 2 | 7 | 2 | LINESTRING (0.38 0.65, 0.90 0.22) |
+| resource_2 | 1 | 5 | 1 | LINESTRING (0.81 0.10, 0.42 0.71) |
 
 ### Synthesis
 
@@ -667,3 +674,80 @@ with those six columns already populated anywhere is left alone and the command 
 Passing `--sigma` against a file that already exists throws either way (shape-only or
 complete): `--sigma` only ever controls count invention, and a file that already has a
 vehicle list has nothing left for it to control.
+
+## `synth network-loads`
+
+Combines ten upstream files -- `network.gpkg`, `desire_lines.gpkg`, `departures.csv`,
+`time_intervals.csv`, `dwell_times.csv`, `vehicles.csv`, `vehicle_velocities.csv`,
+`vehicle_capacities.csv`, `road_capacities.csv`, and
+`alternative_specific_constants.csv` -- into `network_loads.csv`: one row per (link, time
+interval, vehicle) the simulation actually put traffic on.
+
+| link_id | time_interval | vehicle | vehicle_count | velocity | load_pct |
+|---|---|---|---|---|---|
+| 19 | morning | van | 2 | 0.919 | 1.000 |
+| 16 | morning | van | 1 | 5.298 | 0.400 |
+| 28 | evening | van | 1 | 0.820 | 0.500 |
+
+`vehicle_count` is a whole number of vehicles: presence on a link during an interval is a
+yes-or-no question, not a fraction. `velocity` is that vehicle's actual velocity there
+(grade- and congestion-adjusted, averaged if several of its trips crossed the same link that
+interval), and `load_pct` is the mean fraction of capacity those vehicles were carrying --
+below 1 for a part-loaded final vehicle in a run, and for return trips, which run at
+`dwell_times.csv`'s `load_pct`.
+
+### Synthesis
+
+The network is filtered twice before anything moves. Links whose `road_type` has no entry in
+`road_capacities.csv` are dropped outright -- with no capacity there's no meaningful v/c
+ratio. Then each vehicle keeps only the links whose `road_type` it has a velocity for in
+`vehicle_velocities.csv`, so every vehicle routes on its own subgraph and a vehicle simply
+never appears on a road it can't use.
+
+Each resource's whole transacted flow is spread across intervals by `departures.csv`,
+renormalized over just the intervals `time_intervals.csv` actually defines (the two files are
+synthesized independently, so departures may name intervals that don't exist) and rounded to
+whole units, since a resource is counted in whole units.
+
+Flow leaves as **shipments**, not as individual transactions. Every delivery the same origin
+agent owes the same zone for the same resource is grouped into one shipment, which is what
+stops a single package from becoming a single van trip. Within an interval, a weighted draw
+picks a shipment (by outstanding quantity), a second weighted draw picks which of that
+shipment's destinations ride along on this run, and the run drives to the **centroid of those
+specific destinations** rather than to any one of them -- the centroid of the agents actually
+being served, not the zone polygon's geometric centroid, which could sit in empty space in a
+zone shaped nothing like where its agents cluster.
+
+Vehicles that have both an ASC and a capacity for the resource bid for the run. Those that
+can actually reach the centroid are entered into a multinomial logit on
+`alternative_specific_constant + time_coefficient * route time + distance_coefficient * route
+distance`, and one is drawn -- a genuine probabilistic choice, not the utility-maximizing
+`argmax` an earlier version of this file used. Enough of that vehicle then go out to carry
+the flow, the last one part-loaded with whatever's left over. If no vehicle can reach the
+centroid, that origin-agent/destination-zone pair is dropped entirely rather than retried
+against a different draw of destinations: a different subset might well succeed, but there's
+no non-arbitrary number of retries to allow, and the pair is already looking unreachable.
+
+Grade is signed relative to a link's own start-to-end coordinate order, so traversing a
+two-way link backward flips it -- the climb becomes the descent. That's why a route carries a
+direction alongside each link id rather than a bare link id: the sign has to be recoverable
+when the trip is simulated, not just when the graph is built.
+
+Velocities are frozen for the duration of an interval and recomputed at the end of it, from
+the loads that interval actually produced, via the BPR volume-delay function
+(`1 + alpha * (v/c)^beta`, with each vehicle's own `bpr_alpha`/`bpr_beta`). So every trip in
+an interval sees the same congestion, and routing decides on the state the network was in
+when the interval opened. Loads deliberately do **not** accumulate across intervals: a
+vehicle that has driven on is no longer on the link behind it, so v/c is recomputed from
+scratch each interval rather than summed forever.
+
+Trips that don't finish within an interval carry their position into the next one and resume
+at the updated velocities. On arrival, `dwell_times.csv` decides how long the vehicle sits
+before returning; the return departs at the start of the first interval beginning at or after
+that, since every trip fires at an interval boundary, and is dropped if that falls past the
+end of the simulated period or if no return route exists.
+
+Like `synth agents` and `synth desire-lines`, this invents no shape, so `--sigma` throws
+unconditionally, and the command is a no-op once `network_loads.csv` already exists -- the
+draws here are genuinely random, so a re-run would silently produce a different assignment
+rather than recomputing the same one.

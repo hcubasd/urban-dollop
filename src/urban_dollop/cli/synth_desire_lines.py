@@ -21,6 +21,11 @@ def _resource_names(rows):
     return capacities & needs
 
 
+def _validate_zone_id(rows, path):
+    if rows and "zone_id" not in rows[0]:
+        raise ValueError(f"{path}: missing 'zone_id' column")
+
+
 def _validate_agents(rows, path):
     # NaN is expected here -- an agent's stratum may not have had a given
     # resource in its Layer 3 intersection at all, which upcasts that
@@ -46,6 +51,7 @@ def run(sigma=1.0, sigma_given=False):
 
     rows = gpd.read_file("agents.gpkg").to_dict("records")
     try:
+        _validate_zone_id(rows, "agents.gpkg")
         _validate_agents(rows, "agents.gpkg")
     except ValueError as e:
         print(e, file=sys.stderr)
@@ -58,5 +64,7 @@ def run(sigma=1.0, sigma_given=False):
         if lines:
             gdf = gpd.GeoDataFrame(lines, crs=None)
         else:
-            gdf = gpd.GeoDataFrame(columns=["resource", "quantity", "geometry"], crs=None)
+            gdf = gpd.GeoDataFrame(
+                columns=["resource", "quantity", "origin_agent_id", "destination_zone_id", "geometry"], crs=None
+            )
         gdf.to_file("desire_lines.gpkg", driver="GPKG")

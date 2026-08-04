@@ -1,435 +1,463 @@
 import math
-import random
+from collections import defaultdict
 
-import geopandas as gpd
-import pandas as pd
-from scipy.spatial import KDTree
 from scipy.sparse import lil_matrix
 from scipy.sparse.csgraph import dijkstra
-from shapely.geometry import LineString
+from scipy.spatial import KDTree
+
+from urban_dollop.helpers.weighted_choice import weighted_choice
+
+_COORD_PRECISION = 10
 
 
-def _build_graph(network_gdf, vehicle_rows, velocities, road_capacities, link_loads, interval_duration):
-    coords_list = []
+def _velocity(free_flow, grade, forward, alpha, beta, v_over_c):
+    """A vehicle's actual velocity on one link in one direction.
+
+    Grade is stored relative to the link's own start-to-end coordinate
+    order, so traversing it backward flips the sign -- the climb becomes
+    the descent. That sign flip is the whole reason routes carry a
+    direction alongside each link id rather than a bare link id.
+
+    Congestion then scales the grade-adjusted free-flow velocity down by
+    the BPR volume-delay factor, 1 + alpha * (v/c)^beta. v/c is a
+    property of the link, not of the direction, so both directions share
+    it -- only the grade term differs.
+    """
+    signed_grade = grade if forward else -grade
+    effective = free_flow * math.exp(-signed_grade / 100.0)
+    if effective <= 0:
+        effective = 1e-9
+    return effective / (1.0 + alpha * (v_over_c ** beta))
+
+
+def _mnl_choice(items, utilities):
+    """One item drawn with probability exp(u_i) / sum(exp(u)) -- a
+    textbook multinomial logit. The max utility is subtracted from every
+    exponent first, which cancels out of the ratio exactly but keeps
+    exp() from overflowing on large utilities.
+    """
+    largest = max(utilities)
+    return weighted_choice(items, [math.exp(u - largest) for u in utilities])
+
+
+def _index_nodes(links):
+    """Assign a node id to every distinct link endpoint, annotating each
+    link with its own two node ids. Returns the node coordinates, indexed
+    by node id.
+    """
     coord_index = {}
+    coords = []
+    for link in links:
+        for end, key in (("a", "start"), ("b", "end")):
+            xy = link[key]
+            rounded = (round(xy[0], _COORD_PRECISION), round(xy[1], _COORD_PRECISION))
+            if rounded not in coord_index:
+                coord_index[rounded] = len(coords)
+                coords.append(rounded)
+            link[end] = coord_index[rounded]
+    return coords
 
-    def node_id(xy):
-        key = (round(xy[0], 10), round(xy[1], 10))
-        if key not in coord_index:
-            coord_index[key] = len(coords_list)
-            coords_list.append(key)
-        return coord_index[key]
 
-    edges = []
-    for link_id, row in network_gdf.iterrows():
-        geom = row.geometry
-        road_type = row["road_type"]
-        if road_type not in road_capacities:
+def _vehicle_graph(links, n_nodes, free_flow, alpha, beta, v_over_c):
+    """A directed travel-time graph over the links this vehicle can use,
+    plus the arc -> (link_id, forward) map needed to turn a node path
+    back into a route. A one-way link contributes only its stored
+    direction; a two-way link contributes both, at different travel times
+    whenever it has any grade at all.
+    """
+    graph = lil_matrix((n_nodes, n_nodes))
+    arcs = {}
+    for link in links:
+        velocity = free_flow.get(link["road_type"])
+        if velocity is None:
             continue
-        c = list(geom.coords)
-        a = node_id(c[0])
-        b = node_id(c[-1])
-        length = geom.length
-        grade = row["grade"]
-        direction = row["direction"]
-        cap = road_capacities[road_type]
-        pcu_load = link_loads.get(link_id, 0.0)
-        v_over_c = pcu_load / cap if cap > 0 else 0.0
-        edges.append((link_id, a, b, length, road_type, grade, direction, v_over_c))
-
-    n_nodes = len(coords_list)
-    node_coords = list(coords_list)
-
-    vehicle_graphs = {}
-    for v_row in vehicle_rows:
-        vehicle = v_row["vehicle"]
-        alpha = v_row["bpr_alpha"]
-        beta = v_row["bpr_beta"]
-        g = lil_matrix((n_nodes, n_nodes))
-        link_times = {}
-        link_lengths = {}
-        for link_id, a, b, length, road_type, grade, direction, v_over_c in edges:
-            vel = velocities.get((vehicle, road_type))
-            if vel is None:
-                continue
-            eff_vel = vel * math.exp(-grade / 100.0)
-            if eff_vel <= 0:
-                eff_vel = 1e-9
-            t0 = length / eff_vel / interval_duration
-            bpr = t0 * (1.0 + alpha * (v_over_c ** beta))
-            link_times[(vehicle, link_id)] = bpr
-            link_lengths[link_id] = length
-            if direction in ("both", "forward"):
-                existing = g[a, b]
-                if existing == 0 or bpr < existing:
-                    g[a, b] = bpr
-            if direction in ("both", "backward"):
-                existing = g[b, a]
-                if existing == 0 or bpr < existing:
-                    g[b, a] = bpr
-        vehicle_graphs[vehicle] = (g.tocsr(), link_times)
-
-    return node_coords, coord_index, edges, vehicle_graphs, link_lengths
+        congestion = v_over_c.get(link["link_id"], 0.0)
+        traversals = [(link["a"], link["b"], True)]
+        if not link["oneway"]:
+            traversals.append((link["b"], link["a"], False))
+        for source, target, forward in traversals:
+            travel_time = link["length"] / _velocity(velocity, link["grade"], forward, alpha, beta, congestion)
+            existing = graph[source, target]
+            if existing == 0 or travel_time < existing:
+                graph[source, target] = travel_time
+                arcs[(source, target)] = (link["link_id"], forward)
+    return graph.tocsr(), arcs
 
 
-def _snap(coord, kd_tree, node_coords):
-    _, idx = kd_tree.query(coord)
-    return idx
-
-
-def _route_links(predecessors, dest, src, edges_by_node_pair):
+def _route(predecessors, source, target, arcs):
+    """The (link_id, forward) sequence from source to target, or None if
+    the predecessor chain doesn't actually connect them.
+    """
     path = []
-    node = dest
-    while node != src:
-        prev = predecessors[node]
-        if prev < 0:
+    node = target
+    while node != source:
+        previous = predecessors[node]
+        if previous < 0:
             return None
-        link_id = edges_by_node_pair.get((prev, node))
-        if link_id is None:
+        arc = arcs.get((previous, node))
+        if arc is None:
             return None
-        path.append(link_id)
-        node = prev
+        path.append(arc)
+        node = previous
     return list(reversed(path))
 
 
-def network_loads(network_gdf, desire_lines_gdf, departures_df, time_intervals_df,
-                  dwell_times_df, vehicles_df, vehicle_velocities_df,
-                  vehicle_capacities_df, road_capacities_df, asc_df):
+def _consolidate(desire_line_rows):
+    """Group transactions into depot-to-zone shipments, keyed by
+    (resource, origin agent, destination zone).
 
-    network_gdf = network_gdf.set_index("link_id")
+    This is what stops one package becoming one van trip: every delivery
+    the same origin agent owes the same zone for the same resource is one
+    shipment, so a vehicle can be filled with deliveries that happen to
+    be going the same way. Each underlying transaction stays visible
+    inside the shipment as its own destination point and remaining
+    quantity, since which specific agents end up on a given run decides
+    where that run actually drives.
+    """
+    shipments = {}
+    for row in desire_line_rows:
+        key = (row["resource"], row["origin_agent_id"], row["destination_zone_id"])
+        coords = list(row["geometry"].coords)
+        if key not in shipments:
+            shipments[key] = {
+                "resource": row["resource"],
+                "origin": coords[0],
+                "destinations": [],
+            }
+        shipments[key]["destinations"].append({"point": coords[-1], "remaining": row["quantity"]})
+    return list(shipments.values())
 
-    vehicles_list = vehicles_df.to_dict("records")
-    vehicle_map = {r["vehicle"]: r for r in vehicles_list}
 
-    velocities = {
-        (r["vehicle"], r["road_type"]): r["velocity"]
-        for _, r in vehicle_velocities_df.iterrows()
-    }
+def _interval_targets(desire_line_rows, departure_rows, intervals):
+    """How many units of each resource depart in each interval.
 
-    road_cap_map = {r["road_type"]: r["capacity"] for _, r in road_capacities_df.iterrows()}
+    A resource's whole transacted flow is spread across the intervals
+    departures.csv gives it, renormalized over just the intervals
+    time_intervals.csv actually defines -- the two files are synthesized
+    independently, so departures may name intervals that don't exist.
+    Rounding to whole units happens here: a resource is counted in whole
+    units, so a fractional departure isn't a deliverable quantity.
+    """
+    total_flow = defaultdict(float)
+    for row in desire_line_rows:
+        total_flow[row["resource"]] += row["quantity"]
 
-    cap_map = {
-        (r["vehicle"], r["resource"]): r["capacity"]
-        for _, r in vehicle_capacities_df.iterrows()
-    }
+    probabilities = defaultdict(dict)
+    for row in departure_rows:
+        if row["time_interval"] in set(intervals):
+            probabilities[row["resource"]][row["time_interval"]] = row["probability"]
 
-    asc_map = {
-        (r["vehicle"], r["resource"]): r["alpha"]
-        for _, r in asc_df.iterrows()
-    }
-
-    dwell_map = {r["resource"]: (r["dwell_time"], r["load_pct"]) for _, r in dwell_times_df.iterrows()}
-
-    intervals = time_intervals_df["time_interval"].tolist()
-    durations = {r["time_interval"]: r["duration"] for _, r in time_intervals_df.iterrows()}
-    interval_set = set(intervals)
-
-    dep_map = {}
-    for _, r in departures_df.iterrows():
-        if r["time_interval"] not in interval_set:
+    targets = {}
+    for resource, by_interval in probabilities.items():
+        total_probability = sum(by_interval.values())
+        if total_probability <= 0:
             continue
-        dep_map.setdefault(r["resource"], {})[r["time_interval"]] = r["probability"]
-    for resource, probs in dep_map.items():
-        total = sum(probs.values())
-        if total > 0:
-            dep_map[resource] = {k: v / total for k, v in probs.items()}
+        for interval, probability in by_interval.items():
+            share = probability / total_probability
+            targets[(resource, interval)] = round(total_flow.get(resource, 0.0) * share)
+    return targets
 
-    resource_cols_supply = [c for c in desire_lines_gdf.columns
-                            if c.endswith("_supply") and pd.api.types.is_numeric_dtype(desire_lines_gdf[c])]
-    resource_cols_demand = [c for c in desire_lines_gdf.columns
-                            if c.endswith("_demand") and pd.api.types.is_numeric_dtype(desire_lines_gdf[c])]
-    resources = [c[:-len("_supply")] for c in resource_cols_supply]
 
-    dl_flows = {}
-    for dl_idx, dl_row in desire_lines_gdf.iterrows():
-        geom = dl_row.geometry
-        origin = geom.coords[0]
-        dest = geom.coords[-1]
-        for resource in resources:
-            sup = dl_row.get(f"{resource}_supply", 0) or 0
-            dem = dl_row.get(f"{resource}_demand", 0) or 0
-            flow = min(sup, dem)
-            if flow > 0:
-                dl_flows[(dl_idx, resource)] = {"flow": flow, "origin": origin, "dest": dest}
+def _select_destinations(shipment, budget):
+    """Which of a shipment's destinations ride along on this run, drawn
+    weighted by how much each still has outstanding, until either the
+    shipment empties or the interval's remaining budget for the resource
+    does. Returns the picks and their total, without depleting anything
+    -- a run that turns out to be unroutable must leave the shipment
+    exactly as it found it.
+    """
+    outstanding = {
+        index: destination["remaining"]
+        for index, destination in enumerate(shipment["destinations"])
+        if destination["remaining"] > 0
+    }
+    picks = []
+    taken = 0.0
+    while taken < budget and outstanding:
+        index = weighted_choice(list(outstanding), list(outstanding.values()))
+        amount = min(outstanding[index], budget - taken)
+        picks.append((shipment["destinations"][index], amount))
+        taken += amount
+        del outstanding[index]
+    return picks, taken
 
-    link_pcu_loads = {}
-    output_rows = []
 
-    in_flight = []
+def _centroid(points):
+    return (
+        sum(x for x, _ in points) / len(points),
+        sum(y for _, y in points) / len(points),
+    )
 
-    cumulative_time = 0.0
 
-    for interval in intervals:
-        duration = durations[interval]
+def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
+    """Move a trip forward by one interval's worth of time.
 
-        node_coords, coord_index, edges, vehicle_graphs, link_lengths = _build_graph(
-            network_gdf, vehicles_list, velocities, road_cap_map, link_pcu_loads, duration
+    Returns the links it sat on at any point during the interval, and
+    whether it arrived. Presence is deliberately binary: a vehicle either
+    was on a link during this interval or it wasn't. Weighting it by the
+    fraction of the link covered would say a vehicle halfway down a link
+    is half a vehicle, which isn't what a link's load means -- it's there
+    or it isn't.
+    """
+    alpha, beta = vehicle_params["bpr_alpha"], vehicle_params["bpr_beta"]
+    touched = {}
+    remaining_time = duration
+    while trip["index"] < len(trip["route"]):
+        link_id, forward = trip["route"][trip["index"]]
+        link = links_by_id[link_id]
+        velocity = _velocity(
+            free_flow[link["road_type"]], link["grade"], forward, alpha, beta, v_over_c.get(link_id, 0.0)
         )
+        touched[link_id] = velocity
+        needed = (link["length"] - trip["progress"]) / velocity
+        if needed > remaining_time:
+            trip["progress"] += velocity * remaining_time
+            remaining_time = 0.0
+            break
+        remaining_time -= needed
+        trip["index"] += 1
+        trip["progress"] = 0.0
+    arrived = trip["index"] >= len(trip["route"])
+    return touched, arrived, duration - remaining_time
 
-        if not node_coords:
-            cumulative_time += duration
+
+def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_rows,
+                  dwell_time_rows, vehicle_rows, vehicle_velocity_rows,
+                  vehicle_capacity_rows, road_capacity_rows, asc_rows):
+    """One row per (link, time interval, vehicle) the simulation put
+    traffic on: link_id, time_interval, vehicle, vehicle_count, velocity,
+    load_pct.
+
+    The network is filtered twice before anything moves: links whose road
+    type has no road capacity are dropped outright (no capacity, no
+    meaningful v/c), and then each vehicle keeps only the links whose road
+    type it has a velocity for -- so every vehicle routes on its own
+    subgraph, and a vehicle that can't use a road simply never appears on
+    it.
+
+    Each interval, every resource departs the share of its total
+    transacted flow that departures.csv assigns to that interval. Flow
+    leaves as shipments (see _consolidate): a weighted draw picks an
+    origin-agent/destination-zone pair, a second weighted draw picks which
+    of that pair's destinations ride along, and the run drives to their
+    centroid rather than to any one of them. Vehicles that have both an
+    ASC and a capacity for the resource bid for the run; those that can
+    actually reach the centroid are entered into a multinomial logit on
+    asc + time_coefficient * route time + distance_coefficient * route
+    distance, and one is drawn. Enough of that vehicle go out to carry the
+    flow, the last one part-loaded with whatever's left over. If no vehicle
+    can reach the centroid, that origin-agent/destination-zone pair is
+    dropped entirely rather than retried against a different draw of
+    destinations -- picking a different subset might well succeed, but
+    there's no non-arbitrary number of retries, and the pair is already
+    looking unreachable.
+
+    Velocities are frozen for the duration of an interval and recomputed
+    at the end of it from the loads that interval actually produced, so
+    every trip in an interval sees the same congestion and routing decides
+    on the state the network was in when the interval opened. Loads do not
+    accumulate across intervals: a vehicle that has driven on is no longer
+    on the link behind it.
+    """
+    road_capacity = {row["road_type"]: row["capacity"] for row in road_capacity_rows}
+    links = []
+    for row in network_rows:
+        if row["road_type"] not in road_capacity:
             continue
+        coords = list(row["geometry"].coords)
+        links.append({
+            "link_id": row["link_id"],
+            "road_type": row["road_type"],
+            "grade": row["grade"],
+            "oneway": bool(row["oneway"]),
+            "length": row["geometry"].length,
+            "start": coords[0],
+            "end": coords[-1],
+        })
+    if not links:
+        return []
 
-        kd_tree = KDTree(node_coords)
+    node_coords = _index_nodes(links)
+    links_by_id = {link["link_id"]: link for link in links}
+    kd_tree = KDTree(node_coords)
 
-        edges_by_node_pair = {}
-        for link_id, a, b, length, road_type, grade, direction, v_over_c in edges:
-            if direction in ("both", "forward"):
-                edges_by_node_pair[(a, b)] = link_id
-            if direction in ("both", "backward"):
-                edges_by_node_pair[(b, a)] = link_id
+    vehicles = {row["vehicle"]: row for row in vehicle_rows}
+    free_flow = defaultdict(dict)
+    for row in vehicle_velocity_rows:
+        if row["vehicle"] in vehicles:
+            free_flow[row["vehicle"]][row["road_type"]] = row["velocity"]
+    capacity = {
+        (row["vehicle"], row["resource"]): row["capacity"]
+        for row in vehicle_capacity_rows
+        if row["vehicle"] in vehicles
+    }
+    asc = {
+        (row["vehicle"], row["resource"]): row["alternative_specific_constant"]
+        for row in asc_rows
+        if row["vehicle"] in vehicles
+    }
+    dwell = {row["resource"]: (row["dwell_time"], row["load_pct"]) for row in dwell_time_rows}
 
-        dist_cache = {}
-        pred_cache = {}
+    intervals = [row["time_interval"] for row in time_interval_rows]
+    durations = {row["time_interval"]: row["duration"] for row in time_interval_rows}
+    starts = []
+    clock = 0.0
+    for interval in intervals:
+        starts.append(clock)
+        clock += durations[interval]
 
-        interval_trips = []
+    shipments = _consolidate(desire_line_rows)
+    targets = _interval_targets(desire_line_rows, departure_rows, intervals)
 
-        for resource in resources:
-            if resource not in dep_map:
+    v_over_c = {}
+    active = []
+    pending_returns = defaultdict(list)
+    output = []
+
+    for position, interval in enumerate(intervals):
+        duration = durations[interval]
+        graphs = {}
+        for vehicle, row in vehicles.items():
+            usable = [link for link in links if link["road_type"] in free_flow.get(vehicle, {})]
+            graphs[vehicle] = _vehicle_graph(
+                usable, len(node_coords), free_flow.get(vehicle, {}),
+                row["bpr_alpha"], row["bpr_beta"], v_over_c,
+            )
+        shortest = {}
+
+        def paths_from(vehicle, source):
+            if (vehicle, source) not in shortest:
+                graph, _ = graphs[vehicle]
+                shortest[(vehicle, source)] = dijkstra(
+                    graph, directed=True, indices=source, return_predecessors=True
+                )
+            return shortest[(vehicle, source)]
+
+        for pending in pending_returns.pop(position, []):
+            distances, predecessors = paths_from(pending["vehicle"], pending["source"])
+            if distances[pending["target"]] == float("inf"):
                 continue
-            prob = dep_map[resource].get(interval, 0.0)
-            if prob <= 0:
-                continue
-
-            resource_dl = {k: dict(v) for k, v in dl_flows.items() if k[1] == resource}
-            if not resource_dl:
-                continue
-
-            total_flow = sum(v["flow"] for v in resource_dl.values()) * prob
-            remaining_flow = {k: v["flow"] * prob for k, v in resource_dl.items()}
-            total_remaining = total_flow
-
-            while total_remaining > 1e-9:
-                weights = [(k, remaining_flow[k]) for k in remaining_flow if remaining_flow[k] > 1e-9]
-                if not weights:
-                    break
-                keys = [w[0] for w in weights]
-                probs = [w[1] for w in weights]
-                total_w = sum(probs)
-                probs_norm = [p / total_w for p in probs]
-                u = random.random()
-                cumsum = 0.0
-                chosen_key = keys[-1]
-                for k, p_k in zip(keys, probs_norm):
-                    cumsum += p_k
-                    if u <= cumsum:
-                        chosen_key = k
-                        break
-
-                dl_idx, _ = chosen_key
-                info = resource_dl[chosen_key]
-                origin = info["origin"]
-                dest = info["dest"]
-
-                o_node = _snap(origin, kd_tree, node_coords)
-                d_node = _snap(dest, kd_tree, node_coords)
-
-                if o_node == d_node:
-                    remaining_flow[chosen_key] = 0.0
-                    total_remaining -= info["flow"] * prob
-                    continue
-
-                best_vehicle = None
-                best_util = None
-                best_route = None
-                best_route_time = None
-                best_route_dist = None
-
-                for v_row in vehicles_list:
-                    vehicle = v_row["vehicle"]
-                    cap = cap_map.get((vehicle, resource), None)
-                    if cap is None:
-                        continue
-                    asc = asc_map.get((vehicle, resource))
-                    if asc is None:
-                        continue
-                    time_cost = v_row["time_cost"]
-                    dist_cost = v_row["distance_cost"]
-
-                    cache_key = (vehicle, o_node)
-                    if cache_key not in dist_cache:
-                        g_csr, _ = vehicle_graphs[vehicle]
-                        d, p = dijkstra(g_csr, directed=True, indices=o_node,
-                                        return_predecessors=True)
-                        dist_cache[cache_key] = d
-                        pred_cache[cache_key] = p
-
-                    route_time = dist_cache[cache_key][d_node]
-                    if route_time == float("inf") or route_time <= 0:
-                        continue
-
-                    route = _route_links(pred_cache[cache_key], d_node, o_node, edges_by_node_pair)
-                    if route is None:
-                        continue
-
-                    route_dist = sum(link_lengths.get(l, 0.0) for l in route)
-                    util = asc + time_cost * route_time + dist_cost * route_dist
-
-                    if best_util is None or util > best_util:
-                        best_util = util
-                        best_vehicle = vehicle
-                        best_route = route
-                        best_route_time = route_time
-                        best_route_dist = route_dist
-
-                if best_vehicle is None:
-                    remaining_flow[chosen_key] = 0.0
-                    total_remaining = sum(v for v in remaining_flow.values() if v > 1e-9)
-                    continue
-
-                cap = cap_map[(best_vehicle, resource)]
-                units = min(remaining_flow[chosen_key], cap)
-                load_pct = units / cap
-                n_vehicles = 1
-                pcu = vehicle_map[best_vehicle]["pcu"]
-
-                interval_trips.append({
-                    "vehicle": best_vehicle,
-                    "route": best_route,
-                    "n_vehicles": n_vehicles,
-                    "pcu": pcu,
-                    "load_pct": load_pct,
-                    "resource": resource,
-                    "origin": origin,
-                    "dest": dest,
-                    "o_node": o_node,
-                    "d_node": d_node,
-                    "departure_time": cumulative_time,
+            route = _route(predecessors, pending["source"], pending["target"], graphs[pending["vehicle"]][1])
+            if route:
+                active.append({
+                    "vehicle": pending["vehicle"], "route": route, "index": 0, "progress": 0.0,
+                    "load_pct": pending["load_pct"], "resource": pending["resource"],
+                    "source": pending["source"], "target": pending["target"], "returning": True,
                 })
 
-                remaining_flow[chosen_key] -= units
-                total_remaining -= units
-
-        all_trips = interval_trips + in_flight
-        next_in_flight = []
-
-        link_contributions = {}
-
-        for trip in all_trips:
-            vehicle = trip["vehicle"]
-            route = trip["route"]
-            n_vehicles = trip["n_vehicles"]
-            pcu = trip["pcu"]
-            load_pct = trip["load_pct"]
-            departure_time = trip["departure_time"]
-
-            v_row = vehicle_map[vehicle]
-            alpha = v_row["bpr_alpha"]
-            beta = v_row["bpr_beta"]
-
-            interval_start = cumulative_time
-            interval_end = cumulative_time + duration
-
-            current_time = departure_time
-            remaining_route = list(route)
-
-            for link_id in remaining_route:
-                road_type = network_gdf.loc[link_id, "road_type"]
-                grade = network_gdf.loc[link_id, "grade"]
-                length = link_lengths.get(link_id, 0.0)
-                cap = road_cap_map.get(road_type, 1.0)
-                pcu_load = link_pcu_loads.get(link_id, 0.0)
-                vel = velocities.get((vehicle, road_type), 1.0)
-                eff_vel = vel * math.exp(-grade / 100.0)
-                if eff_vel <= 0:
-                    eff_vel = 1e-9
-                t0 = length / eff_vel
-                bpr = t0 * (1.0 + alpha * ((pcu_load / cap) ** beta if cap > 0 else 0.0))
-
-                link_enter = current_time
-                link_exit = current_time + bpr
-
-                overlap_start = max(link_enter, interval_start)
-                overlap_end = min(link_exit, interval_end)
-                overlap = max(0.0, overlap_end - overlap_start)
-
-                if overlap > 0 and bpr > 0:
-                    fraction = overlap / bpr
-                    key = (link_id, interval)
-                    if key not in link_contributions:
-                        link_contributions[key] = {}
-                    vk = vehicle
-                    if vk not in link_contributions[key]:
-                        link_contributions[key][vk] = {"weighted_count": 0.0, "weighted_load": 0.0,
-                                                        "weighted_vel": 0.0, "total_weight": 0.0}
-                    contrib = n_vehicles * fraction
-                    link_contributions[key][vk]["weighted_count"] += contrib
-                    link_contributions[key][vk]["weighted_load"] += contrib * load_pct
-                    link_contributions[key][vk]["weighted_vel"] += contrib * (length / bpr)
-                    link_contributions[key][vk]["total_weight"] += contrib
-
-                if link_exit > interval_end:
-                    fraction_done = (interval_end - link_enter) / bpr if bpr > 0 else 0.0
-                    next_in_flight.append({
-                        **trip,
-                        "route": [link_id] + [l for l in remaining_route if l != link_id],
-                        "departure_time": interval_end - (bpr * (1.0 - fraction_done)),
-                    })
+        for resource in sorted({row["resource"] for row in desire_line_rows}):
+            budget = targets.get((resource, interval), 0)
+            eligible = [v for v in vehicles if (v, resource) in asc and (v, resource) in capacity]
+            if not eligible:
+                continue
+            while budget > 0:
+                available = [
+                    s for s in shipments
+                    if s["resource"] == resource and any(d["remaining"] > 0 for d in s["destinations"])
+                ]
+                if not available:
+                    break
+                shipment = weighted_choice(
+                    available,
+                    [sum(d["remaining"] for d in s["destinations"]) for s in available],
+                )
+                picks, taken = _select_destinations(shipment, budget)
+                if taken <= 0:
                     break
 
-                current_time = link_exit
+                source = kd_tree.query(shipment["origin"])[1]
+                target = kd_tree.query(_centroid([d["point"] for d, _ in picks]))[1]
+                if source == target:
+                    for destination, amount in picks:
+                        destination["remaining"] -= amount
+                    budget -= taken
+                    continue
 
-            if current_time >= interval_end:
+                options = []
+                utilities = []
+                for vehicle in eligible:
+                    distances, predecessors = paths_from(vehicle, source)
+                    if distances[target] == float("inf") or distances[target] <= 0:
+                        continue
+                    route = _route(predecessors, source, target, graphs[vehicle][1])
+                    if not route:
+                        continue
+                    length = sum(links_by_id[link_id]["length"] for link_id, _ in route)
+                    options.append((vehicle, route))
+                    utilities.append(
+                        asc[(vehicle, resource)]
+                        + vehicles[vehicle]["time_coefficient"] * distances[target]
+                        + vehicles[vehicle]["distance_coefficient"] * length
+                    )
+
+                if not options:
+                    for destination in shipment["destinations"]:
+                        destination["remaining"] = 0.0
+                    continue
+
+                vehicle, route = _mnl_choice(options, utilities)
+                per_vehicle = capacity[(vehicle, resource)]
+                if per_vehicle <= 0:
+                    for destination in shipment["destinations"]:
+                        destination["remaining"] = 0.0
+                    continue
+
+                dispatched = math.ceil(taken / per_vehicle)
+                for unit in range(dispatched):
+                    carried = min(per_vehicle, taken - unit * per_vehicle)
+                    active.append({
+                        "vehicle": vehicle, "route": list(route), "index": 0, "progress": 0.0,
+                        "load_pct": carried / per_vehicle, "resource": resource,
+                        "source": source, "target": target, "returning": False,
+                    })
+
+                for destination, amount in picks:
+                    destination["remaining"] -= amount
+                budget -= taken
+
+        contributions = defaultdict(lambda: {"count": 0, "velocity": 0.0, "load_pct": 0.0})
+        still_active = []
+        for trip in active:
+            touched, arrived, elapsed = _advance(
+                trip, duration, links_by_id, free_flow[trip["vehicle"]], vehicles[trip["vehicle"]], v_over_c
+            )
+            for link_id, velocity in touched.items():
+                entry = contributions[(link_id, trip["vehicle"])]
+                entry["count"] += 1
+                entry["velocity"] += velocity
+                entry["load_pct"] += trip["load_pct"]
+
+            if not arrived:
+                still_active.append(trip)
+                continue
+            if trip["returning"]:
                 continue
 
-            dwell_time, ret_load_pct = dwell_map.get(trip["resource"], (0.0, 0.0))
-            arrival_time = current_time
-            current_idx = intervals.index(interval)
-            fut_cumulative = cumulative_time
-            return_departure_time = None
-            for i, fut_interval in enumerate(intervals[current_idx:]):
-                fut_cumulative += durations[fut_interval]
-                if fut_cumulative >= arrival_time + dwell_time:
-                    next_idx = current_idx + i + 1
-                    if next_idx < len(intervals):
-                        return_departure_time = fut_cumulative
-                    break
+            dwell_time, return_load = dwell.get(trip["resource"], (0.0, 0.0))
+            ready_at = starts[position] + elapsed + dwell_time
+            departs = next((i for i in range(position + 1, len(intervals)) if starts[i] >= ready_at), None)
+            if departs is not None:
+                pending_returns[departs].append({
+                    "vehicle": trip["vehicle"], "source": trip["target"], "target": trip["source"],
+                    "load_pct": return_load, "resource": trip["resource"],
+                })
+        active = still_active
 
-            if return_departure_time is not None:
-                o_node = trip["d_node"]
-                d_node = trip["o_node"]
-                if o_node != d_node:
-                    ret_vehicle = trip["vehicle"]
-                    ret_cache_key = (ret_vehicle, o_node)
-                    if ret_cache_key not in dist_cache:
-                        g_csr, _ = vehicle_graphs[ret_vehicle]
-                        d, p = dijkstra(g_csr, directed=True, indices=o_node,
-                                        return_predecessors=True)
-                        dist_cache[ret_cache_key] = d
-                        pred_cache[ret_cache_key] = p
-                    ret_route_links = _route_links(
-                        pred_cache[ret_cache_key], d_node, o_node, edges_by_node_pair
-                    )
-                    if ret_route_links:
-                        next_in_flight.append({
-                            "vehicle": ret_vehicle,
-                            "route": ret_route_links,
-                            "n_vehicles": math.ceil(n_vehicles * ret_load_pct),
-                            "pcu": pcu,
-                            "load_pct": ret_load_pct,
-                            "resource": trip["resource"],
-                            "origin": trip["dest"],
-                            "dest": trip["origin"],
-                            "o_node": o_node,
-                            "d_node": d_node,
-                            "departure_time": return_departure_time,
-                        })
+        loads = defaultdict(float)
+        for (link_id, vehicle), entry in contributions.items():
+            loads[link_id] += entry["count"] * vehicles[vehicle]["pcu"]
+            output.append({
+                "link_id": link_id,
+                "time_interval": interval,
+                "vehicle": vehicle,
+                "vehicle_count": entry["count"],
+                "velocity": entry["velocity"] / entry["count"],
+                "load_pct": entry["load_pct"] / entry["count"],
+            })
 
-        for (link_id, intv), vehicle_data in link_contributions.items():
-            for vehicle, data in vehicle_data.items():
-                tw = data["total_weight"]
-                if tw > 0:
-                    link_pcu_loads[link_id] = link_pcu_loads.get(link_id, 0.0) + data["weighted_count"] * vehicle_map[vehicle]["pcu"]
-                    output_rows.append({
-                        "link_id": link_id,
-                        "time_interval": intv,
-                        "vehicle": vehicle,
-                        "count": data["weighted_count"],
-                        "velocity": data["weighted_vel"] / tw,
-                        "load_pct": data["weighted_load"] / tw,
-                    })
+        v_over_c = {}
+        for link_id, load in loads.items():
+            link_capacity = road_capacity[links_by_id[link_id]["road_type"]]
+            v_over_c[link_id] = load / link_capacity if link_capacity > 0 else 0.0
 
-        in_flight = next_in_flight
-        cumulative_time += duration
-
-    return output_rows
+    return output
