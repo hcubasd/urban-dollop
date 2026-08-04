@@ -303,3 +303,34 @@ throws unconditionally (nothing here is an invented shape either), and the comma
 no-op once `desire_lines.gpkg` already exists, for the same reason -- the pairing draws are
 genuinely random, so a re-run would silently produce a different set of lines rather than
 recomputing the same ones.
+
+## `synth network`
+
+A GeoDataFrame of road links over the unit square, written to `network.gpkg`: `link_id`,
+`grade`, `road_type`, `oneway`, and a 2-point `LineString`. Self-contained -- reads nothing,
+invents everything from scratch.
+
+### Synthesis
+
+Points are scattered uniformly over the unit square and connected by Delaunay triangulation,
+which needs at least 3 non-degenerate points -- below that, the two smaller cases are handled
+directly rather than attempted: zero or one point produces zero edges (nothing to connect),
+and exactly two points are connected directly to each other, skipping triangulation.
+`random_count(sigma)` is the only place `--sigma` acts, for both the point count and the size
+of the invented `road_type` vocabulary (`road_type_1`, `road_type_2`, ...); `grade`
+(`triangular(-6.0, 6.0, 0.0)`, unchanged from the original implementation) is a value, not a
+count, and stays fixed regardless of sigma.
+
+`oneway` is a plain boolean rather than a three-way flag. A `LineString`'s start and end are
+just two points with no inherent direction of travel, so when a link is one-way the start/end
+order is chosen (a coin flip) to already match the allowed direction, rather than storing an
+arbitrary order alongside a flag saying whether to walk it backward -- the same footgun OSM's
+`oneway=-1` tag exists to patch, avoided here by controlling construction instead of
+correcting it after the fact. When `oneway` is false, both directions are legal and the
+stored order is immaterial. `grade` is always relative to whichever order ends up stored --
+the reverse direction is its negation, not an independently sampled value, since a road's
+slope is one physical fact, not two.
+
+Same leaf contract as `synth zones`: `--sigma` only controls invention, so it throws if
+passed while `network.gpkg` already exists, and the command is a no-op on an existing file
+otherwise.
