@@ -334,3 +334,24 @@ slope is one physical fact, not two.
 Same leaf contract as `synth zones`: `--sigma` only controls invention, so it throws if
 passed while `network.gpkg` already exists, and the command is a no-op on an existing file
 otherwise.
+
+## `synth time-intervals`
+
+One row per synthesized time interval, written to `time_intervals.csv`: a sequential label
+(`interval_1`, `interval_2`, ...) and a `duration`. Self-contained -- reads nothing, invents
+everything from scratch.
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for the interval count. `duration` is
+a value, not a count, and its distribution is deliberately unassuming
+(`lognormvariate(0.0, 1.0)`, fixed regardless of sigma): the simulation period and what a
+single interval represents (an hour, a day, a month) are entirely up to whoever uses this
+data, so there's no canonical shape worth preserving or inventing around.
+
+Row order is not incidental: `network_loads` treats file order as chronological order,
+walking intervals in the order they appear rather than parsing the label, so rows are always
+written `interval_1`, `interval_2`, ... in that order and never shuffled.
+
+Same leaf contract as `synth network`: `--sigma` throws if passed while `time_intervals.csv`
+already exists, and the command is a no-op on an existing file otherwise.

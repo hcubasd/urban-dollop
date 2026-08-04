@@ -101,6 +101,10 @@ def main():
         from urban_dollop.cli.synth_network import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "time-intervals"]:
+        from urban_dollop.cli.synth_time_intervals import run
+
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)
