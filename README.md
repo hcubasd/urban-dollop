@@ -523,3 +523,36 @@ being forced to enumerate every combination the way full synthesis does. A file 
 `--sigma` against a file that already exists throws either way (shape-only or complete):
 `--sigma` only ever controls count invention, and a file that already has vehicle/road_type
 pairs has nothing left for it to control.
+
+## `synth vehicle-capacities`
+
+One row per (`vehicle`, `resource`) pair, written to `vehicle_capacities.csv`: `vehicle`,
+`resource`, and a `capacity`. Self-contained -- never reads any other file.
+
+| vehicle | resource | capacity |
+|---|---|---|
+| vehicle_1 | resource_1 | 4 |
+| vehicle_1 | resource_2 | 1 |
+| vehicle_2 | resource_1 | 7 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for `n_vehicles` and `n_resources`
+independently -- their full cross product is what gets a row each. `capacity` is a value, not
+a count, despite needing the same "positive whole number" shape a count needs -- a vehicle
+carries 12 pallets, not 12.7, but that's a domain constraint on this value's type, not a
+reason to tie it to sigma (unlike `resource_level` in `capacities.csv`/`needs.csv`, which
+legitimately is sigma-driven because it plays a dual shape-defining role `capacity` doesn't
+have here). So `capacity` is fixed regardless of sigma, drawn with the same shape
+`random_count` uses (`ceil(lognormvariate(0, 1))`) but as a literal, not parameterized by
+`--sigma`.
+
+Alternatively, hand it a `vehicle_capacities.csv` that already has `vehicle`/`resource`
+filled in (real vehicles and resources are welcome) with `capacity` left entirely empty, and
+it fills capacities for exactly those pairs, in that order -- the shape comes from what you
+gave it, not from `--sigma`. Given pairs don't need to be a full cross product, same reasoning
+as `vehicle-velocities`. A file with `capacity` already populated anywhere is left alone and
+the command is a no-op; whichever state the file is in, every non-empty `capacity` must be a
+whole number. Passing `--sigma` against a file that already exists throws either way
+(shape-only or complete): `--sigma` only ever controls count invention, and a file that
+already has vehicle/resource pairs has nothing left for it to control.
