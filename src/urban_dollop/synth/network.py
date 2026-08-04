@@ -30,41 +30,66 @@ def _edges(points):
     return sorted(edge_set)
 
 
-def network(sigma=1.0):
-    """A GeoDataFrame of road links over the unit square: scatter points,
-    connect them (Delaunay triangulation once there are enough points to
-    triangulate), and label each edge. random_count(sigma) is the only
-    place --sigma acts, for both the point count and the road_type
-    vocabulary size -- everything else here is a value, not a count, and
+def network(geometries=None, sigma=1.0):
+    """A GeoDataFrame of road links: link_id, grade, road_type, oneway,
+    and a 2-point LineString. geometries=None means nothing exists yet --
+    invent both the topology (points scattered over the unit square,
+    connected by Delaunay triangulation once there are enough to
+    triangulate -- below that, the two smaller cases in _edges are
+    handled directly) and the attributes. geometries given means the
+    shape is already decided -- attributes get synthesized for exactly
+    that geometry, in that order, ignoring sigma for the point/edge
+    count (there's nothing left for it to control).
+
+    random_count(sigma) is the only place --sigma acts, for the point
+    count (invented-geometry case only) and the road_type vocabulary
+    size (both cases); everything else is a value, not a count, and
     stays fixed regardless of sigma.
 
-    Direction is a plain boolean, not a three-way flag: 'oneway' true
-    means travel is only legal start-to-end as stored, so start/end are
-    chosen (a coin flip) to already match the allowed direction, rather
-    than storing an arbitrary order plus a correction flag (the footgun
-    OSM's oneway=-1 exists to patch). 'oneway' false means both
-    directions are legal and order is immaterial. grade is always
-    relative to whichever order ends up stored -- the reverse direction
-    is just its negation, not an independent draw.
+    oneway is a plain boolean rather than a three-way flag. In the
+    invented-geometry case, a LineString's start and end are just two
+    points with no inherent direction of travel, so when a link is
+    one-way the start/end order is chosen (a coin flip) to already match
+    the allowed direction, rather than storing an arbitrary order
+    alongside a flag saying whether to walk it backward -- the same
+    footgun OSM's oneway=-1 tag exists to patch, avoided here by
+    controlling construction instead of correcting it after the fact.
+    That trick has no equivalent when geometry is given rather than
+    invented: real geometry's coordinate order is whatever it already
+    is, so a one-way link there is just as likely to have been "walked
+    backward" as not -- an unavoidable property of not having authored
+    the geometry ourselves, not a gap in this logic. Either way, when
+    oneway is false both directions are legal and order is immaterial,
+    and grade is always relative to whichever order the geometry stores
+    -- the reverse direction is its negation, not an independent draw.
     """
-    n_points = random_count(sigma)
-    points = [(random.uniform(0.0, 1.0), random.uniform(0.0, 1.0)) for _ in range(n_points)]
-
     n_road_types = random_count(sigma)
     road_types = [f"road_type_{i + 1}" for i in range(n_road_types)]
 
     rows = []
-    for i, (a, b) in enumerate(_edges(points)):
-        oneway = random.random() < 0.5
-        if oneway and random.random() < 0.5:
-            a, b = b, a
-        rows.append({
-            "link_id": i,
-            "grade": random.triangular(-6.0, 6.0, 0.0),
-            "road_type": random.choice(road_types),
-            "oneway": oneway,
-            "geometry": LineString([points[a], points[b]]),
-        })
+    if geometries is None:
+        n_points = random_count(sigma)
+        points = [(random.uniform(0.0, 1.0), random.uniform(0.0, 1.0)) for _ in range(n_points)]
+        for i, (a, b) in enumerate(_edges(points)):
+            oneway = random.random() < 0.5
+            if oneway and random.random() < 0.5:
+                a, b = b, a
+            rows.append({
+                "link_id": i,
+                "grade": random.triangular(-6.0, 6.0, 0.0),
+                "road_type": random.choice(road_types),
+                "oneway": oneway,
+                "geometry": LineString([points[a], points[b]]),
+            })
+    else:
+        for i, geometry in enumerate(geometries):
+            rows.append({
+                "link_id": i,
+                "grade": random.triangular(-6.0, 6.0, 0.0),
+                "road_type": random.choice(road_types),
+                "oneway": random.random() < 0.5,
+                "geometry": geometry,
+            })
 
     if not rows:
         return gpd.GeoDataFrame(columns=_COLUMNS, crs=None)

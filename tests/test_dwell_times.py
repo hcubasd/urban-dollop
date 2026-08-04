@@ -21,3 +21,8 @@ def test_resources_are_sequential_and_unique():
     rows = dwell_times(sigma=2.0)
     resources = [r["resource"] for r in rows]
     assert resources == [f"resource_{i + 1}" for i in range(len(rows))]
+
+
+def test_given_resources_used_as_is_and_ignore_sigma_for_count():
+    rows = dwell_times(resources=["grains", "parcels"], sigma=5.0)
+    assert [r["resource"] for r in rows] == ["grains", "parcels"]

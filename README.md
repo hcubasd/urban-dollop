@@ -39,6 +39,11 @@ A GeoDataFrame of Voronoi-tessellated zone polygons over the unit square, one ro
 `zone_id`, written to `zones.gpkg`. `zone_id` values are plain integers (`1`, `2`, ...),
 matching the convention `effects.csv` uses for its own `zone_id` stratum.
 
+| zone_id | geometry |
+|---|---|
+| 1 | POLYGON ((0.41 0.09, 0.63 0.22, ...)) |
+| 2 | POLYGON ((0.12 0.55, 0.41 0.09, ...)) |
+
 ### Synthesis
 
 Fully self-contained, same leaf contract as every other command. Run it with nothing on
@@ -334,9 +339,8 @@ recomputing the same ones.
 
 ## `synth network`
 
-A GeoDataFrame of road links over the unit square, written to `network.gpkg`: `link_id`,
-`grade`, `road_type`, `oneway`, and a 2-point `LineString`. Self-contained -- reads nothing,
-invents everything from scratch.
+A GeoDataFrame of road links, written to `network.gpkg`: `link_id`, `grade`, `road_type`,
+`oneway`, and a 2-point `LineString`. Self-contained -- never reads any other file.
 
 | link_id | grade | road_type | oneway | geometry |
 |---|---|---|---|---|
@@ -365,15 +369,29 @@ stored order is immaterial. `grade` is always relative to whichever order ends u
 the reverse direction is its negation, not an independently sampled value, since a road's
 slope is one physical fact, not two.
 
-Same leaf contract as `synth zones`: `--sigma` only controls invention, so it throws if
-passed while `network.gpkg` already exists, and the command is a no-op on an existing file
-otherwise.
+Alternatively, hand it a `network.gpkg` that already has `geometry` entirely populated (a
+real road network extract, for instance) with `grade`/`road_type`/`oneway` left entirely
+empty, and it synthesizes those attributes for exactly that geometry, in that order --
+ignoring `--sigma` for the point/edge count, since there's nothing left for it to invent
+there. `link_id` isn't part of this contract either way -- it's a plain positional index, not
+a real identifier, so it's always reassigned fresh, the same way `agent_id` is never
+something a caller supplies. One asymmetry worth naming: for invented geometry, `oneway`'s
+start/end choice is guaranteed correct by construction (see above); for given geometry, a
+one-way link's "forward" direction is just whatever the input's coordinate order already is
+-- there's no way to guarantee that matches anything real without having authored the
+geometry ourselves, an unavoidable property of the shape-only case rather than a gap in this
+logic. A file with any of `grade`/`road_type`/`oneway` already populated anywhere is left
+alone and the command is a no-op: partial attribute filling would mean regenerating some
+links' attributes but not others, which has no well-defined meaning. Passing `--sigma`
+against a file that already exists throws either way (shape-only or complete): `--sigma` only
+ever controls count invention, and a file that already has geometry has nothing left for it
+to control.
 
 ## `synth time-intervals`
 
-One row per synthesized time interval, written to `time_intervals.csv`: a sequential label
-(`interval_1`, `interval_2`, ...) and a `duration`. Self-contained -- reads nothing, invents
-everything from scratch.
+One row per time interval, written to `time_intervals.csv`: a label (`interval_1`,
+`interval_2`, ... when invented) and a `duration`. Self-contained -- never reads any other
+file.
 
 | time_interval | duration |
 |---|---|
@@ -393,15 +411,22 @@ Row order is not incidental: `network_loads` treats file order as chronological 
 walking intervals in the order they appear rather than parsing the label, so rows are always
 written `interval_1`, `interval_2`, ... in that order and never shuffled.
 
-Same leaf contract as `synth network`: `--sigma` throws if passed while `time_intervals.csv`
-already exists, and the command is a no-op on an existing file otherwise.
+Alternatively, hand it a `time_intervals.csv` that already has `time_interval` filled in
+(real labels like `AM_peak`/`midday` are welcome) with `duration` left entirely empty, and it
+synthesizes durations for exactly those labels, in that order -- the count and the labels
+come from what you gave it, not from `--sigma`. A file with `duration` already populated
+anywhere is left alone and the command is a no-op: partial duration filling would mean
+regenerating some intervals' durations but not others, which has no well-defined meaning.
+Passing `--sigma` against a file that already exists throws either way (shape-only or
+complete): `--sigma` only ever controls count invention, and a file that already has interval
+labels has nothing left for it to control.
 
 ## `synth departures`
 
 One row per (`resource`, `time_interval`) a resource departs in, written to `departures.csv`:
 `resource`, `time_interval`, and `probability` -- each resource's probabilities sum to 1
-across the intervals it uses. Self-contained -- invents its own resources and its own
-interval labels, independent of `time_intervals.csv` or anything else.
+across the intervals it uses. Self-contained -- never reads any other file, so its own
+interval labels are independent of `time_intervals.csv`, invented or given.
 
 | resource | time_interval | probability |
 |---|---|---|
@@ -427,14 +452,25 @@ sigma, since they're values, not counts. `logistic(mu - beta)` turns the cutpoin
 cumulative probabilities from 0 to 1; consecutive differences are the probability mass for
 each interval, in the same sorted order the intervals were drawn in.
 
-Same leaf contract as `synth time-intervals`: `--sigma` throws if passed while
-`departures.csv` already exists, and the command is a no-op on an existing file otherwise.
+Alternatively, hand it a `departures.csv` that already has `resource`/`time_interval` filled
+in (real resource names and which intervals each one uses) with `probability` left entirely
+empty, and it fills probabilities for exactly those pairs, grouped by resource -- the shape
+comes from what you gave it, not from `--sigma`. The row order within a resource's given
+pairs doesn't need to mean anything -- unlike `time_intervals.csv`, this file makes no
+chronological claim, so pairs are grouped and filled in whatever order they're given. A file
+with `probability` already populated anywhere is left alone and the command is a no-op:
+probability is filled per resource-group internally, but eligibility to fill anything at all
+is still a file-wide, all-or-nothing check, same as every other leaf command -- partial
+filling would mean regenerating some resources' distributions but not others, which has no
+well-defined meaning. Passing `--sigma` against a file that already exists throws either way
+(shape-only or complete): `--sigma` only ever controls count invention, and a file that
+already has resource/interval pairs has nothing left for it to control.
 
 ## `synth dwell-times`
 
-One row per synthesized resource, written to `dwell_times.csv`: `dwell_time` (how long a
-vehicle dwells before its return trip) and `load_pct` (the fraction of load carried back).
-Self-contained -- invents its own resources.
+One row per resource, written to `dwell_times.csv`: `dwell_time` (how long a vehicle dwells
+before its return trip) and `load_pct` (the fraction of load carried back). Self-contained --
+never reads any other file.
 
 | resource | dwell_time | load_pct |
 |---|---|---|
@@ -450,5 +486,11 @@ gets the same deliberately unassuming `lognormvariate(0.0, 1.0)` treatment as
 `load_pct` is already the canonical choice for "a fraction in `[0, 1)`" as plain
 `random.random()`, nothing legacy to migrate there.
 
-Same leaf contract as `synth departures`: `--sigma` throws if passed while
-`dwell_times.csv` already exists, and the command is a no-op on an existing file otherwise.
+Alternatively, hand it a `dwell_times.csv` that already has `resource` filled in (real
+resource names are welcome) with `dwell_time`/`load_pct` left entirely empty, and it fills
+both for exactly those resources -- checked jointly, since they're synthesized together, so
+one column filled while the other isn't is rejected rather than partially accepted. A file
+with `dwell_time`/`load_pct` already populated anywhere is left alone and the command is a
+no-op. Passing `--sigma` against a file that already exists throws either way (shape-only or
+complete): `--sigma` only ever controls count invention, and a file that already has resource
+labels has nothing left for it to control.

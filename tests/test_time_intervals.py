@@ -16,3 +16,13 @@ def test_labels_are_sequential_and_in_order():
 def test_durations_are_positive():
     rows = time_intervals(sigma=2.0)
     assert all(r["duration"] > 0 for r in rows)
+
+
+def test_given_labels_used_as_is_and_ignore_sigma_for_count():
+    rows = time_intervals(labels=["AM_peak", "midday", "PM_peak"], sigma=5.0)
+    assert [r["time_interval"] for r in rows] == ["AM_peak", "midday", "PM_peak"]
+
+
+def test_given_labels_preserve_order():
+    rows = time_intervals(labels=["z", "a", "m"], sigma=1.0)
+    assert [r["time_interval"] for r in rows] == ["z", "a", "m"]

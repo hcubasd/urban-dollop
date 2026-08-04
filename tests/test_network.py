@@ -44,3 +44,13 @@ def test_road_type_vocabulary_is_labeled_sequentially():
     gdf = network(sigma=2.0)
     for road_type in gdf["road_type"]:
         assert road_type.startswith("road_type_")
+
+
+def test_given_geometries_used_as_is_and_ignore_sigma_for_count():
+    from shapely.geometry import LineString
+
+    geometries = [LineString([(0.0, 0.0), (1.0, 1.0)]), LineString([(1.0, 1.0), (2.0, 0.0)])]
+    gdf = network(geometries=geometries, sigma=5.0)
+    assert len(gdf) == 2
+    assert list(gdf["geometry"]) == geometries
+    assert gdf["link_id"].tolist() == [0, 1]

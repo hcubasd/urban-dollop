@@ -37,3 +37,19 @@ def test_a_resources_intervals_are_a_subset_of_the_shared_menu():
     menu_size = max(int(i.split("_")[1]) for i in all_intervals)
     full_menu = {f"interval_{j + 1}" for j in range(menu_size)}
     assert all_intervals <= full_menu
+
+
+def test_given_pairs_used_as_is_and_ignore_sigma_for_shape():
+    pairs = [
+        {"resource": "grains", "time_interval": "AM_peak"},
+        {"resource": "grains", "time_interval": "PM_peak"},
+        {"resource": "parcels", "time_interval": "midday"},
+    ]
+    rows = departures(pairs=pairs, sigma=5.0)
+    assert {(r["resource"], r["time_interval"]) for r in rows} == {
+        ("grains", "AM_peak"), ("grains", "PM_peak"), ("parcels", "midday"),
+    }
+    grains_probs = [r["probability"] for r in rows if r["resource"] == "grains"]
+    assert abs(sum(grains_probs) - 1.0) < 1e-9
+    parcels_probs = [r["probability"] for r in rows if r["resource"] == "parcels"]
+    assert parcels_probs == [1.0]
