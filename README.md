@@ -681,13 +681,13 @@ Combines ten upstream files -- `network.gpkg`, `desire_lines.gpkg`, `departures.
 `time_intervals.csv`, `dwell_times.csv`, `vehicles.csv`, `vehicle_velocities.csv`,
 `vehicle_capacities.csv`, `road_capacities.csv`, and
 `alternative_specific_constants.csv` -- into `network_loads.csv`: one row per (link, time
-interval, vehicle) the simulation actually put traffic on.
+interval, vehicle, direction) the simulation actually put traffic on.
 
-| link_id | time_interval | vehicle | vehicle_count | velocity | load_pct |
-|---|---|---|---|---|---|
-| 19 | morning | van | 2 | 0.919 | 1.000 |
-| 16 | morning | van | 1 | 5.298 | 0.400 |
-| 28 | evening | van | 1 | 0.820 | 0.500 |
+| link_id | time_interval | vehicle | forward | vehicle_count | velocity | load_pct |
+|---|---|---|---|---|---|---|
+| 19 | morning | van | True | 2 | 0.919 | 1.000 |
+| 16 | morning | van | True | 1 | 5.298 | 0.400 |
+| 28 | evening | van | False | 1 | 0.820 | 0.500 |
 
 `vehicle_count` is a whole number of vehicles: presence on a link during an interval is a
 yes-or-no question, not a fraction. `velocity` is that vehicle's actual velocity there
@@ -695,6 +695,15 @@ yes-or-no question, not a fraction. `velocity` is that vehicle's actual velocity
 interval), and `load_pct` is the mean fraction of capacity those vehicles were carrying --
 below 1 for a part-loaded final vehicle in a run, and for return trips, which run at
 `dwell_times.csv`'s `load_pct`.
+
+`forward` says which way the traffic went: `True` along the link's own start-to-end coordinate
+order, `False` against it. A two-way link travelled both ways in one interval gets two rows,
+not one. Splitting rather than pre-summing is what keeps the grade's sign recoverable
+downstream -- grade is stored relative to that same start-to-end order, so a backward
+traversal negates it, and `network-emissions` has no way to reconstruct that from a merged row.
+It also stops two genuinely different velocities being averaged into one meaningless number.
+Anything wanting the both-ways total just sums the pair; the reverse isn't possible once
+they're merged.
 
 ### Synthesis
 
@@ -823,3 +832,60 @@ not from `--sigma`. Given pairs don't need to be a full cross product, same reas
 and the command is a no-op. Passing `--sigma` against a file that already exists throws either
 way (shape-only or complete): `--sigma` only ever controls count invention, and a file that
 already has vehicle_type/pollutant pairs has nothing left for it to control.
+
+## `synth network-emissions`
+
+Combines five upstream files -- `network_loads.csv`, `network.gpkg`, `vehicles.csv`,
+`copert_v_coefficients.csv`, and `emission_factors.csv` -- into `network_emissions.csv`: one
+row per (link, time interval, vehicle, direction, pollutant, source) that actually emitted
+anything.
+
+| link_id | time_interval | vehicle | forward | pollutant | source | grams |
+|---|---|---|---|---|---|---|
+| 15 | morning | van | False | nox | exhaust | 1.026 |
+| 15 | morning | van | False | pm10 | non-exhaust | 0.071 |
+| 5 | morning | van | True | nox | exhaust | 0.032 |
+| 5 | morning | van | True | pm10 | non-exhaust | 0.071 |
+
+Exhaust and non-exhaust are reported as **separate rows**, never summed into one number, even
+for the same pollutant. They're different physical mechanisms that happen to produce the same
+substance -- tailpipe chemistry versus brake and tire wear -- and the source methodology plots
+them side by side for exactly that reason. Summing them here would throw away the ability to
+say how much of a PM figure is which; a consumer wanting the combined total just adds the two
+rows.
+
+### Synthesis
+
+Exhaust follows COPERT V. Each load row's velocity, its link's grade, and its vehicles' mean
+load are snapped onto COPERT's published gradient/payload grid (nearest bin, clamped at the
+ends), the speed-dependent function gives a factor in g/km, and that scales by distance
+travelled -- link length times vehicle count, which is Eq. 8's `N * M * e` directly:
+
+```
+(alpha*V^2 + beta*V + gamma + delta/V) / (epsilon*V^2 + zeta*V + eta) * (1 - RF)
+```
+
+Grade is signed relative to the link's own start-to-end coordinate order, so a **backward
+traversal negates it before snapping** -- the climb becomes the descent, landing on a different
+coefficient row entirely. That's the whole reason `network_loads.csv` carries a direction per
+row. A factor that comes out negative is clamped to zero (no such thing as negative emissions),
+and a row is skipped rather than emitted when the function has nothing meaningful to say: at or
+below zero velocity (the `delta/V` term is undefined, and a stationary vehicle isn't accruing
+distance-based emissions) or where the denominator vanishes.
+
+Non-exhaust (brake wear, tire wear, road surface wear, resuspension) uses
+`emission_factors.csv`'s flat factor scaled by the same distance. It's deliberately not
+gradient/payload stratified, and deliberately **does not vary with velocity**: COPERT V doesn't
+publish non-exhaust factors against that grid, and while the source methodology notes
+non-exhaust emissions do vary with speed, it gives no functional form for it. Inventing one
+here would be fabricating a relationship the reference doesn't specify -- if a velocity
+dependence is wanted later, `emission_factors.csv` gaining velocity bins is the place for it.
+
+A pollutant only gets an exhaust row where coefficients exist for that vehicle type at the
+snapped bin combination, and only gets a non-exhaust row where an emission factor exists for
+that vehicle type -- the two tables are synthesized independently, so a pollutant may have one,
+both, or neither. Links absent from `network.gpkg` and vehicles absent from `vehicles.csv` are
+skipped rather than guessed at.
+
+Like `synth network-loads`, this invents no shape, so `--sigma` throws unconditionally, and the
+command is a no-op once `network_emissions.csv` already exists.

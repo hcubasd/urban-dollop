@@ -19,7 +19,9 @@ _REQUIRED = {
     "alternative_specific_constants.csv": ("vehicle", "resource", "alternative_specific_constant"),
 }
 
-_OUTPUT_COLUMNS = ["link_id", "time_interval", "vehicle", "vehicle_count", "velocity", "load_pct"]
+_OUTPUT_COLUMNS = [
+    "link_id", "time_interval", "vehicle", "forward", "vehicle_count", "velocity", "load_pct",
+]
 
 
 def _validate(frame, path):

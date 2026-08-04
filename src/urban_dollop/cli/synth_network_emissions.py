@@ -1,3 +1,4 @@
+import os
 import sys
 
 import geopandas as gpd
@@ -5,39 +6,60 @@ import pandas as pd
 
 from urban_dollop.synth.network_emissions import network_emissions
 
+_REQUIRED = {
+    "network_loads.csv": ("link_id", "time_interval", "vehicle", "forward", "vehicle_count", "velocity", "load_pct"),
+    "network.gpkg": ("link_id", "grade"),
+    "vehicles.csv": ("vehicle", "vehicle_type"),
+    "copert_v_coefficients.csv": (
+        "vehicle_type", "pollutant", "gradient_bin", "payload_bin",
+        "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "rf",
+    ),
+    "emission_factors.csv": ("vehicle_type", "pollutant", "emission_factor"),
+}
 
-def run():
-    try:
-        network_loads_df = pd.read_csv("network_loads.csv")
-    except Exception as e:
-        print(f"error reading network_loads.csv: {e}", file=sys.stderr)
+_OUTPUT_COLUMNS = [
+    "link_id", "time_interval", "vehicle", "forward", "pollutant", "source", "grams",
+]
+
+
+def _validate(frame, path):
+    for column in _REQUIRED[path]:
+        if column not in frame.columns:
+            raise ValueError(f"{path}: missing '{column}' column")
+
+
+def run(sigma=1.0, sigma_given=False):
+    if sigma_given:
+        print(
+            "network_emissions.csv: synth network-emissions combines existing data, it invents nothing -- --sigma has nothing to control",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if os.path.exists("network_emissions.csv"):
+        return
+
+    missing = [path for path in _REQUIRED if not os.path.exists(path)]
+    if missing:
+        print(f"not ready yet -- synthesize first: {', '.join(sorted(missing))}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        network_gdf = gpd.read_file("network.gpkg")
-    except Exception as e:
-        print(f"error reading network.gpkg: {e}", file=sys.stderr)
-        sys.exit(1)
+    frames = {}
+    for path in _REQUIRED:
+        frames[path] = gpd.read_file(path) if path.endswith(".gpkg") else pd.read_csv(path)
 
     try:
-        vehicles_df = pd.read_csv("vehicles.csv")
-    except Exception as e:
-        print(f"error reading vehicles.csv: {e}", file=sys.stderr)
+        for path, frame in frames.items():
+            _validate(frame, path)
+    except ValueError as e:
+        print(e, file=sys.stderr)
         sys.exit(1)
 
-    try:
-        copert_v_df = pd.read_csv("copert_v_coefficients.csv")
-    except Exception as e:
-        print(f"error reading copert_v_coefficients.csv: {e}", file=sys.stderr)
-        sys.exit(1)
+    rows = network_emissions(
+        frames["network_loads.csv"].to_dict("records"),
+        frames["network.gpkg"].to_dict("records"),
+        frames["vehicles.csv"].to_dict("records"),
+        frames["copert_v_coefficients.csv"].to_dict("records"),
+        frames["emission_factors.csv"].to_dict("records"),
+    )
 
-    try:
-        emission_factors_df = pd.read_csv("emission_factors.csv")
-    except Exception as e:
-        print(f"error reading emission_factors.csv: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    rows = network_emissions(network_loads_df, network_gdf, vehicles_df,
-                             copert_v_df, emission_factors_df)
-
-    pd.DataFrame(rows).to_csv("network_emissions.csv", index=False)
+    pd.DataFrame(rows, columns=_OUTPUT_COLUMNS).to_csv("network_emissions.csv", index=False)

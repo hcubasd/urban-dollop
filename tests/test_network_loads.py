@@ -126,6 +126,42 @@ def test_end_to_end_puts_traffic_on_both_links():
     assert all(row["time_interval"] == "day" for row in rows)
 
 
+def test_outbound_traffic_is_marked_forward():
+    # the corridor is laid out start-to-end in the direction of travel
+    rows = network_loads(*_fixture())
+    assert all(row["forward"] is True for row in rows)
+
+
+def test_return_trip_is_marked_backward():
+    fixture = list(_fixture())
+    fixture[3] = [{"time_interval": "a", "duration": 100.0}, {"time_interval": "b", "duration": 100.0}]
+    fixture[2] = [{"resource": "parcels", "time_interval": "a", "probability": 1.0}]
+    rows = network_loads(*fixture)
+    outbound = [row for row in rows if row["time_interval"] == "a"]
+    returning = [row for row in rows if row["time_interval"] == "b"]
+    assert outbound and returning
+    assert all(row["forward"] is True for row in outbound)
+    assert all(row["forward"] is False for row in returning)
+
+
+def test_opposing_traffic_in_one_interval_stays_on_separate_rows():
+    fixture = list(_fixture())
+    # a second shipment running the corridor the other way, so both
+    # directions of both links carry traffic in the same interval
+    fixture[1] = list(fixture[1]) + [
+        {"resource": "parcels", "quantity": 4, "origin_agent_id": 2, "destination_zone_id": 10,
+         "geometry": LineString([(2.0, 0.0), (0.0, 0.0)])},
+    ]
+    rows = network_loads(*fixture)
+    keys = [(row["link_id"], row["time_interval"], row["vehicle"], row["forward"]) for row in rows]
+    # never merged: each (link, interval, vehicle, direction) appears once
+    assert len(keys) == len(set(keys))
+    assert {row["forward"] for row in rows} == {True, False}
+    # and the both-ways total is still recoverable by summing the pair
+    both_ways = sum(row["vehicle_count"] for row in rows if row["link_id"] == 0)
+    assert both_ways == 2
+
+
 def test_a_full_load_fits_one_vehicle():
     rows = network_loads(*_fixture())
     assert all(row["vehicle_count"] == 1 for row in rows)

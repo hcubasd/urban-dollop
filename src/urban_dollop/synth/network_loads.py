@@ -192,12 +192,17 @@ def _centroid(points):
 def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
     """Move a trip forward by one interval's worth of time.
 
-    Returns the links it sat on at any point during the interval, and
-    whether it arrived. Presence is deliberately binary: a vehicle either
-    was on a link during this interval or it wasn't. Weighting it by the
-    fraction of the link covered would say a vehicle halfway down a link
-    is half a vehicle, which isn't what a link's load means -- it's there
-    or it isn't.
+    Returns the (link, direction) pairs it sat on at any point during the
+    interval, and whether it arrived. Presence is deliberately binary: a
+    vehicle either was on a link during this interval or it wasn't.
+    Weighting it by the fraction of the link covered would say a vehicle
+    halfway down a link is half a vehicle, which isn't what a link's load
+    means -- it's there or it isn't.
+
+    Direction is part of the key, not folded away, because the two
+    directions of a graded link are genuinely different traversals: they
+    run at different velocities, and downstream emission modelling needs
+    the grade's sign, which is only recoverable from the direction.
     """
     alpha, beta = vehicle_params["bpr_alpha"], vehicle_params["bpr_beta"]
     touched = {}
@@ -208,7 +213,7 @@ def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
         velocity = _velocity(
             free_flow[link["road_type"]], link["grade"], forward, alpha, beta, v_over_c.get(link_id, 0.0)
         )
-        touched[link_id] = velocity
+        touched[(link_id, forward)] = velocity
         needed = (link["length"] - trip["progress"]) / velocity
         if needed > remaining_time:
             trip["progress"] += velocity * remaining_time
@@ -224,9 +229,16 @@ def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
 def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_rows,
                   dwell_time_rows, vehicle_rows, vehicle_velocity_rows,
                   vehicle_capacity_rows, road_capacity_rows, asc_rows):
-    """One row per (link, time interval, vehicle) the simulation put
-    traffic on: link_id, time_interval, vehicle, vehicle_count, velocity,
-    load_pct.
+    """One row per (link, time interval, vehicle, direction) the
+    simulation put traffic on: link_id, time_interval, vehicle, forward,
+    vehicle_count, velocity, load_pct.
+
+    A two-way link travelled both ways in one interval yields two rows,
+    not one. Splitting rather than pre-summing keeps the grade's sign
+    recoverable downstream (grade is stored relative to the link's own
+    start-to-end order, so a backward traversal negates it) and stops two
+    genuinely different velocities being averaged into one meaningless
+    number. Anything wanting the both-ways total just sums the pair.
 
     The network is filtered twice before anything moves: links whose road
     type has no road capacity are dropped outright (no capacity, no
@@ -421,8 +433,8 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
             touched, arrived, elapsed = _advance(
                 trip, duration, links_by_id, free_flow[trip["vehicle"]], vehicles[trip["vehicle"]], v_over_c
             )
-            for link_id, velocity in touched.items():
-                entry = contributions[(link_id, trip["vehicle"])]
+            for (link_id, forward), velocity in touched.items():
+                entry = contributions[(link_id, forward, trip["vehicle"])]
                 entry["count"] += 1
                 entry["velocity"] += velocity
                 entry["load_pct"] += trip["load_pct"]
@@ -444,12 +456,13 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
         active = still_active
 
         loads = defaultdict(float)
-        for (link_id, vehicle), entry in contributions.items():
+        for (link_id, forward, vehicle), entry in contributions.items():
             loads[link_id] += entry["count"] * vehicles[vehicle]["pcu"]
             output.append({
                 "link_id": link_id,
                 "time_interval": interval,
                 "vehicle": vehicle,
+                "forward": forward,
                 "vehicle_count": entry["count"],
                 "velocity": entry["velocity"] / entry["count"],
                 "load_pct": entry["load_pct"] / entry["count"],
