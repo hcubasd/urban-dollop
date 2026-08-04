@@ -113,6 +113,10 @@ def main():
         from urban_dollop.cli.synth_dwell_times import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "vehicle-velocities"]:
+        from urban_dollop.cli.synth_vehicle_velocities import run
+
+        run(sigma, sigma_given)
     else:
         print(f"unknown command: {' '.join(args)}", file=sys.stderr)
         sys.exit(1)

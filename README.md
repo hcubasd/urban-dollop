@@ -494,3 +494,32 @@ with `dwell_time`/`load_pct` already populated anywhere is left alone and the co
 no-op. Passing `--sigma` against a file that already exists throws either way (shape-only or
 complete): `--sigma` only ever controls count invention, and a file that already has resource
 labels has nothing left for it to control.
+
+## `synth vehicle-velocities`
+
+One row per (`vehicle`, `road_type`) pair, written to `vehicle_velocities.csv`: `vehicle`,
+`road_type`, and a `velocity`. Self-contained -- never reads any other file.
+
+| vehicle | road_type | velocity |
+|---|---|---|
+| vehicle_1 | road_type_1 | 1.563 |
+| vehicle_1 | road_type_2 | 0.842 |
+| vehicle_2 | road_type_1 | 2.104 |
+
+### Synthesis
+
+`random_count(sigma)` is the only place `--sigma` acts, for `n_vehicles` and `n_road_types`
+independently -- their full cross product is what gets a row each. `velocity` is a value, not
+a count, and gets the same deliberately unassuming `lognormvariate(0.0, 1.0)` treatment as
+`time-intervals`' `duration` and `dwell-times`' `dwell_time`.
+
+Alternatively, hand it a `vehicle_velocities.csv` that already has `vehicle`/`road_type`
+filled in (real vehicle and road types are welcome) with `velocity` left entirely empty, and
+it fills velocities for exactly those pairs, in that order -- the shape comes from what you
+gave it, not from `--sigma`. Given pairs don't need to be a full cross product: a caller who
+knows a `boat` has no meaningful velocity on `highway` can simply omit that pair, rather than
+being forced to enumerate every combination the way full synthesis does. A file with
+`velocity` already populated anywhere is left alone and the command is a no-op. Passing
+`--sigma` against a file that already exists throws either way (shape-only or complete):
+`--sigma` only ever controls count invention, and a file that already has vehicle/road_type
+pairs has nothing left for it to control.
