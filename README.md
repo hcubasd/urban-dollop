@@ -320,10 +320,16 @@ resource that survived Layer 3 (found the same way Layer 3 finds them -- matchin
 For each resource independently: the *currently* more-constrained side (whichever has less
 total remaining across all agents, capacity or need) picks a primary agent weighted by their
 own remaining value; the other side picks a secondary agent weighted by their remaining
-value times a distance decay from the primary agent's location (`logistic(-distance)` --
-the same sigmoid used for the ordered-logit models elsewhere in this pipeline, reused here
+value times a distance decay from the primary agent's location (`logistic(-distance / scale)`
+-- the same sigmoid used for the ordered-logit models elsewhere in this pipeline, reused here
 purely as a spatial gravity term, not a probability -- closer agents are more likely
-paired). Self-pairing is excluded by agent id, not by coincidental location. The transacted quantity is `min` of the two specific agents' remaining values on
+paired). `scale` is the agent cloud's own bounding-box diagonal, computed once: a bare
+`logistic(-distance)` silently assumes distances are already O(1), true only for
+unit-square synthesis -- real agent geometry (e.g. a user-supplied `agents.gpkg` in
+metres) would either overflow `math.exp` past a few hundred units apart, or, well before
+that, collapse the decay to near-deterministic nearest-neighbor pairing. Normalizing by
+the cloud's own extent keeps the decay's shape the same regardless of what units the
+geometry is in. Self-pairing is excluded by agent id, not by coincidental location. The transacted quantity is `min` of the two specific agents' remaining values on
 their respective sides -- that's the batch size now, derived from the actual pair instead of
 sampled from an independent distribution, which is why `batch_sizes.csv` is gone: whichever
 agent runs out first *is* the batch size for that transaction. Both agents' remaining values

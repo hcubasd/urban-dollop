@@ -35,7 +35,14 @@ def desire_lines(agent_rows):
     value; the other side picks a secondary agent weighted by their
     remaining value times a distance decay from the primary agent (a
     gravity-model pairing -- closer agents are more likely matched,
-    self-pairing excluded by agent_id). The transacted quantity is
+    self-pairing excluded by agent_id). Distance is normalized by the
+    agent cloud's own bounding-box diagonal before the decay, so the
+    pairing behaves the same regardless of what units agent geometry is
+    in -- logistic(-distance) alone assumes distances are O(1), which
+    only holds for unit-square synthesis; real coordinates (e.g. a
+    user-supplied agents.gpkg in metres) would either overflow
+    math.exp or collapse the decay to near-deterministic nearest-
+    neighbor, well before reaching that overflow. The transacted quantity is
     whichever of the two specific agents' remaining values is smaller --
     that's the "batch size" now, derived from the actual pair instead of
     sampled independently, and it's why batch_sizes.csv is gone. Both
@@ -62,6 +69,17 @@ def desire_lines(agent_rows):
     points = {row["agent_id"]: row["geometry"] for row in agent_rows}
     zones = {row["agent_id"]: row["zone_id"] for row in agent_rows}
 
+    # The gravity term's length scale: the agent cloud's own bounding-box
+    # diagonal, computed once. Cheap (one pass over the points already in
+    # hand) and it keeps distance/scale bounded to roughly [0, 1] regardless
+    # of what units the geometry is in -- unlike a bare logistic(-distance),
+    # which silently assumes distances are already O(1).
+    xs = [p.x for p in points.values()]
+    ys = [p.y for p in points.values()]
+    scale = ((max(xs) - min(xs)) ** 2 + (max(ys) - min(ys)) ** 2) ** 0.5
+    if scale == 0:
+        scale = 1.0  # every agent at the same point -- distance is always 0 anyway
+
     rows = []
     for resource in resources:
         while True:
@@ -77,7 +95,7 @@ def desire_lines(agent_rows):
 
             other_side = need_side if limiting is capacity_side else capacity_side
             candidates = [(aid, w) for aid, w in other_side if aid != primary_id]
-            weights = [w * logistic(-points[primary_id].distance(points[aid])) for aid, w in candidates]
+            weights = [w * logistic(-points[primary_id].distance(points[aid]) / scale) for aid, w in candidates]
             if sum(weights) == 0:
                 break
             secondary_id = weighted_choice([aid for aid, _ in candidates], weights)

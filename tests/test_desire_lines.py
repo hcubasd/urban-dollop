@@ -92,3 +92,54 @@ def test_never_produces_zero_quantity_rows():
     ]
     rows = desire_lines(agents)
     assert all(r["quantity"] > 0 for r in rows)
+
+
+def test_real_world_scale_coordinates_do_not_overflow():
+    # A bare logistic(-distance) overflows math.exp once agents are much more
+    # than ~700 units apart -- e.g. real projected coordinates (UTM metres),
+    # not the unit square this pipeline synthesizes on. Distance is
+    # normalized by the agent cloud's own extent specifically so this stays
+    # well-behaved regardless of what units the geometry is in.
+    agents = [
+        {"agent_id": 1, "zone_id": 1, "geometry": Point(500_000, 4_649_776), "grains_capacity": 5, "grains_need": 0},
+        {"agent_id": 2, "zone_id": 2, "geometry": Point(500_900, 4_650_500), "grains_capacity": 0, "grains_need": 5},
+    ]
+    rows = desire_lines(agents)
+    assert sum(r["quantity"] for r in rows) == 5
+
+
+def test_pairing_odds_are_scale_invariant():
+    # One depot, three consumers at 1x/2x/3x spacing, only enough supply for
+    # one -- so which one gets served reveals the decay's actual shape.
+    # Repeated at unit-square scale and at a real-world-sized scale; a
+    # correctly normalized decay gives (approximately) the same odds either
+    # way, since it's the *relative* spacing that should matter, not the
+    # absolute numbers.
+    def build(scale):
+        agents = [{"agent_id": 0, "zone_id": 0, "geometry": Point(0, 0), "grains_capacity": 1, "grains_need": 0}]
+        for i, d in enumerate([1, 2, 3], start=1):
+            agents.append({
+                "agent_id": i, "zone_id": i, "geometry": Point(d * scale, 0),
+                "grains_capacity": 0, "grains_need": 1,
+            })
+        return agents
+
+    def nearest_share(scale, trials=1500):
+        hits = sum(1 for _ in range(trials) if desire_lines(build(scale))[0]["destination_zone_id"] == 1)
+        return hits / trials
+
+    small = nearest_share(0.3)
+    large = nearest_share(300_000)
+    assert abs(small - large) < 0.1
+
+
+def test_coincident_agents_do_not_divide_by_zero():
+    # Every agent at the same point -- the bounding-box diagonal is 0, which
+    # would divide-by-zero without a guard. Distance between them is also
+    # always 0 regardless of the scale used, so pairing still has to work.
+    agents = [
+        {"agent_id": 1, "zone_id": 1, "geometry": Point(5, 5), "grains_capacity": 3, "grains_need": 0},
+        {"agent_id": 2, "zone_id": 2, "geometry": Point(5, 5), "grains_capacity": 0, "grains_need": 3},
+    ]
+    rows = desire_lines(agents)
+    assert sum(r["quantity"] for r in rows) == 3
