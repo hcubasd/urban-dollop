@@ -1,5 +1,3 @@
-import math
-
 from shapely.geometry import LineString
 
 from urban_dollop.synth.network_emissions import (
@@ -62,7 +60,7 @@ def test_hot_emission_factor_varies_with_velocity():
 def _fixture():
     """One 2-unit link carrying one van forward at full load."""
     network_loads = [
-        {"link_id": 0, "time_interval": "day", "vehicle": "van", "forward": True,
+        {"link_id": 0, "time_interval": "day", "resource": "parcels", "vehicle": "van", "forward": True,
          "vehicle_count": 1, "velocity": 10.0, "load_pct": 1.0},
     ]
     network = [
@@ -206,6 +204,7 @@ def test_the_direction_is_carried_through_to_the_output():
     assert all(row["link_id"] == 0 for row in rows)
     assert all(row["time_interval"] == "day" for row in rows)
     assert all(row["vehicle"] == "van" for row in rows)
+    assert all(row["resource"] == "parcels" for row in rows)
 
 
 def test_empty_loads_produce_nothing():

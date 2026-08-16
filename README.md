@@ -22,6 +22,7 @@ flowchart LR
     dwell_times[dwell-times] --> network_loads
     vehicle_velocities[vehicle-velocities] --> network_loads
     vehicle_capacities[vehicle-capacities] --> network_loads
+    consolidation_radii[consolidation-radii] --> network_loads
     road_capacities[road-capacities] --> network_loads
     alternative_specific_constants[alternative-specific-constants] --> network_loads
     network[network] --> network_loads[network-loads]
@@ -290,30 +291,26 @@ population with a different random draw.
 ## `synth desire-lines`
 
 Combines pairs of agents from `agents.gpkg` into `desire_lines.gpkg`: one row per resource
-transaction between two agents -- `resource`, `quantity`, `origin_agent_id`,
-`destination_zone_id`, and a 2-point `LineString` directed from the provider (capacity side)
+transaction between two agents -- `resource`, `quantity`, `origin_agent_id`, and a 2-point
+`LineString` directed from the provider (capacity side)
 to the consumer (need side). The same two agents can produce more than one line, one per
 resource they trade, or even more than one line for the *same* resource across separate
 draws -- each transaction is its own row regardless of who's involved.
 
-`origin_agent_id` and `destination_zone_id` are what let `network-loads` consolidate
-transactions into depot-to-zone shipments, so a vehicle can be filled with deliveries bound
-for the same zone instead of running one near-empty trip per transaction. Both come straight
-off the paired agent records during pairing -- `agents.gpkg` already carries `zone_id` as one
-of its stratum dimensions, so no downstream spatial join against `zones.gpkg` is needed. The
-consumer's own agent id is deliberately not carried: the destination that matters downstream
-is the zone, and the consumer's exact location is already in the line's end point.
+`origin_agent_id` identifies the supplying depot for `network-loads`. The consumer's location
+is the line endpoint; downstream consolidation groups nearby endpoints around a selected
+consumer, so neither a destination zone nor consumer ID is carried.
 
 `agents.gpkg` alone has everything needed: capacity, need, zone, and location, for every
 resource that survived Layer 3 (found the same way Layer 3 finds them -- matching
 `{resource}_capacity`/`{resource}_need` column pairs, no other file read). There is no
 `batch_sizes.csv` anymore -- see Synthesis below for why.
 
-| resource | quantity | origin_agent_id | destination_zone_id | geometry |
-|---|---|---|---|---|
-| resource_1 | 4 | 3 | 2 | LINESTRING (0.42 0.71, 0.81 0.10) |
-| resource_1 | 2 | 7 | 2 | LINESTRING (0.38 0.65, 0.90 0.22) |
-| resource_2 | 1 | 5 | 1 | LINESTRING (0.81 0.10, 0.42 0.71) |
+| resource | quantity | origin_agent_id | geometry |
+|---|---|---|---|
+| resource_1 | 4 | 3 | LINESTRING (0.42 0.71, 0.81 0.10) |
+| resource_1 | 2 | 7 | LINESTRING (0.38 0.65, 0.90 0.22) |
+| resource_2 | 1 | 5 | LINESTRING (0.81 0.10, 0.42 0.71) |
 
 ### Synthesis
 
@@ -570,6 +567,26 @@ whole number. Passing `--sigma` against a file that already exists throws either
 (shape-only or complete): `--sigma` only ever controls count invention, and a file that
 already has vehicle/resource pairs has nothing left for it to control.
 
+## `synth consolidation-radii`
+
+One row per (`vehicle`, `resource`) pair, written to `consolidation_radii.csv`: `vehicle`,
+`resource`, and a positive `radius` in the shared agents/network coordinate units.
+
+| vehicle | resource | radius |
+|---|---|---|
+| vehicle_1 | resource_1 | 1.126 |
+| vehicle_1 | resource_2 | 0.382 |
+
+### Synthesis
+
+This independent leaf follows `vehicle-capacities`: with no file it independently synthesizes
+vehicle and resource counts with `random_count(sigma)`, takes their cross product, and draws
+each unbounded positive radius from `lognormvariate(0, 1)`. `--sigma` controls only the
+vehicle/resource shape, never radius values. A supplied shape-only file with distinct
+`vehicle`/`resource` pairs and an entirely empty `radius` column is filled in place; a
+complete file is preserved. Network loads uses the intersection of this file with its other
+vehicle/resource inputs, so a missing radius makes a vehicle ineligible for that resource.
+
 ## `synth road-capacities`
 
 One row per road type, written to `road_capacities.csv`: `road_type` and a `capacity`.
@@ -683,17 +700,17 @@ vehicle list has nothing left for it to control.
 
 ## `synth network-loads`
 
-Combines ten upstream files -- `network.gpkg`, `desire_lines.gpkg`, `departures.csv`,
+Combines eleven upstream files -- `network.gpkg`, `desire_lines.gpkg`, `departures.csv`,
 `time_intervals.csv`, `dwell_times.csv`, `vehicles.csv`, `vehicle_velocities.csv`,
-`vehicle_capacities.csv`, `road_capacities.csv`, and
+`vehicle_capacities.csv`, `consolidation_radii.csv`, `road_capacities.csv`, and
 `alternative_specific_constants.csv` -- into `network_loads.csv`: one row per (link, time
-interval, vehicle, direction) the simulation actually put traffic on.
+interval, resource, vehicle, direction) the simulation actually put traffic on.
 
-| link_id | time_interval | vehicle | forward | vehicle_count | velocity | load_pct |
-|---|---|---|---|---|---|---|
-| 19 | morning | van | True | 2 | 0.919 | 1.000 |
-| 16 | morning | van | True | 1 | 5.298 | 0.400 |
-| 28 | evening | van | False | 1 | 0.820 | 0.500 |
+| link_id | time_interval | resource | vehicle | forward | vehicle_count | velocity | load_pct |
+|---|---|---|---|---|---|---|---|
+| 19 | morning | parcels | van | True | 2 | 0.919 | 1.000 |
+| 16 | morning | parcels | van | True | 1 | 5.298 | 0.400 |
+| 28 | evening | parcels | van | False | 1 | 0.820 | 0.500 |
 
 `vehicle_count` is a whole number of vehicles: presence on a link during an interval is a
 yes-or-no question, not a fraction. `velocity` is that vehicle's actual velocity there
@@ -724,24 +741,16 @@ renormalized over just the intervals `time_intervals.csv` actually defines (the 
 synthesized independently, so departures may name intervals that don't exist) and rounded to
 whole units, since a resource is counted in whole units.
 
-Flow leaves as **shipments**, not as individual transactions. Every delivery the same origin
-agent owes the same zone for the same resource is grouped into one shipment, which is what
-stops a single package from becoming a single van trip. Within an interval, a weighted draw
-picks a shipment (by outstanding quantity), a second weighted draw picks which of that
-shipment's destinations ride along on this run, and the run drives to the **centroid of those
-specific destinations** rather than to any one of them -- the centroid of the agents actually
-being served, not the zone polygon's geometric centroid, which could sit in empty space in a
-zone shaped nothing like where its agents cluster.
-
-Vehicles that have both an ASC and a capacity for the resource bid for the run. Those that
-can actually reach the centroid are entered into a multinomial logit on
+Flow leaves as origin/resource shipments, then a weighted draw chooses an origin and a seed
+destination transaction. Vehicles with an ASC, capacity, and consolidation radius for that
+resource bid for the seed origin-to-destination route. Those that can reach the seed enter a
+multinomial logit on
 `alternative_specific_constant + time_coefficient * route time + distance_coefficient * route
-distance`, and one is drawn -- a genuine probabilistic choice, not the utility-maximizing
-`argmax` an earlier version of this file used. Enough of that vehicle then go out to carry
-the flow, the last one part-loaded with whatever's left over. If no vehicle can reach the
-centroid, that origin-agent/destination-zone pair is dropped entirely rather than retried
-against a different draw of destinations: a different subset might well succeed, but there's
-no non-arbitrary number of retries to allow, and the pair is already looking unreachable.
+distance`, and one is drawn. Its consolidation radius includes the seed first and then
+outstanding destinations nearest to it from the same origin/resource. The interval's remaining
+resource budget limits the bundle; enough selected vehicles carry that amount to the seed,
+with only the final vehicle part-loaded. If no vehicle can reach the seed, only that
+transaction is discarded and the origin's other transactions remain eligible.
 
 Grade is signed relative to a link's own start-to-end coordinate order, so traversing a
 two-way link backward flips it -- the climb becomes the descent. That's why a route carries a
@@ -843,15 +852,15 @@ already has vehicle_type/pollutant pairs has nothing left for it to control.
 
 Combines five upstream files -- `network_loads.csv`, `network.gpkg`, `vehicles.csv`,
 `copert_v_coefficients.csv`, and `emission_factors.csv` -- into `network_emissions.csv`: one
-row per (link, time interval, vehicle, direction, pollutant, source) that actually emitted
+row per (link, time interval, resource, vehicle, direction, pollutant, source) that actually emitted
 anything.
 
-| link_id | time_interval | vehicle | forward | pollutant | source | grams |
-|---|---|---|---|---|---|---|
-| 15 | morning | van | False | nox | exhaust | 1.026 |
-| 15 | morning | van | False | pm10 | non-exhaust | 0.071 |
-| 5 | morning | van | True | nox | exhaust | 0.032 |
-| 5 | morning | van | True | pm10 | non-exhaust | 0.071 |
+| link_id | time_interval | resource | vehicle | forward | pollutant | source | grams |
+|---|---|---|---|---|---|---|---|
+| 15 | morning | parcels | van | False | nox | exhaust | 1.026 |
+| 15 | morning | parcels | van | False | pm10 | non-exhaust | 0.071 |
+| 5 | morning | parcels | van | True | nox | exhaust | 0.032 |
+| 5 | morning | parcels | van | True | pm10 | non-exhaust | 0.071 |
 
 Exhaust and non-exhaust are reported as **separate rows**, never summed into one number, even
 for the same pollutant. They're different physical mechanisms that happen to produce the same

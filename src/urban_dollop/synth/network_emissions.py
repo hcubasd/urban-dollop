@@ -51,7 +51,7 @@ def _hot_emission_factor(coefficients, velocity):
 
 def network_emissions(network_load_rows, network_rows, vehicle_rows,
                       copert_rows, emission_factor_rows):
-    """One row per (link, time interval, vehicle, direction, pollutant,
+    """One row per (link, time interval, resource, vehicle, direction, pollutant,
     source) the simulation actually emitted on: link_id, time_interval,
     vehicle, forward, pollutant, source, grams.
 
@@ -125,6 +125,7 @@ def network_emissions(network_load_rows, network_rows, vehicle_rows,
             output.append({
                 "link_id": load["link_id"],
                 "time_interval": load["time_interval"],
+                "resource": load["resource"],
                 "vehicle": load["vehicle"],
                 "forward": load["forward"],
                 "pollutant": pollutant,

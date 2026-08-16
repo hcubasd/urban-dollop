@@ -65,6 +65,6 @@ def run(sigma=1.0, sigma_given=False):
             gdf = gpd.GeoDataFrame(lines, crs=None)
         else:
             gdf = gpd.GeoDataFrame(
-                columns=["resource", "quantity", "origin_agent_id", "destination_zone_id", "geometry"], crs=None
+                columns=["resource", "quantity", "origin_agent_id", "geometry"], crs=None
             )
         gdf.to_file("desire_lines.gpkg", driver="GPKG")

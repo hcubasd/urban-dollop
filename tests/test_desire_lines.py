@@ -34,27 +34,27 @@ def test_line_direction_is_provider_to_consumer():
     assert end == (0.9, 0.9)
 
 
-def test_origin_agent_and_destination_zone_follow_the_line_direction():
+def test_origin_agent_and_geometry_follow_the_line_direction():
     agents = [
         {"agent_id": 1, "zone_id": 10, "geometry": Point(0.1, 0.1), "grains_capacity": 5, "grains_need": 0},
         {"agent_id": 2, "zone_id": 20, "geometry": Point(0.9, 0.9), "grains_capacity": 0, "grains_need": 5},
     ]
     rows = desire_lines(agents)
     assert len(rows) == 1
-    # provider is agent 1, consumer is agent 2 (whose zone is 20)
+    # provider is agent 1 and the endpoint is consumer agent 2
     assert rows[0]["origin_agent_id"] == 1
-    assert rows[0]["destination_zone_id"] == 20
+    assert list(rows[0]["geometry"].coords)[-1] == (0.9, 0.9)
 
 
-def test_consumers_sharing_a_zone_share_a_destination_zone_id():
+def test_desire_lines_do_not_carry_destination_zone_ids():
     agents = [
         {"agent_id": 1, "zone_id": 10, "geometry": Point(0.1, 0.1), "grains_capacity": 10, "grains_need": 0},
         {"agent_id": 2, "zone_id": 20, "geometry": Point(0.8, 0.8), "grains_capacity": 0, "grains_need": 5},
         {"agent_id": 3, "zone_id": 20, "geometry": Point(0.9, 0.9), "grains_capacity": 0, "grains_need": 5},
     ]
     rows = desire_lines(agents)
-    assert {r["destination_zone_id"] for r in rows} == {20}
     assert {r["origin_agent_id"] for r in rows} == {1}
+    assert all("destination_zone_id" not in row for row in rows)
 
 
 def test_single_agent_cannot_pair_with_itself():
@@ -125,7 +125,11 @@ def test_pairing_odds_are_scale_invariant():
         return agents
 
     def nearest_share(scale, trials=1500):
-        hits = sum(1 for _ in range(trials) if desire_lines(build(scale))[0]["destination_zone_id"] == 1)
+        hits = sum(
+            1
+            for _ in range(trials)
+            if list(desire_lines(build(scale))[0]["geometry"].coords)[-1] == (1 * scale, 0)
+        )
         return hits / trials
 
     small = nearest_share(0.3)

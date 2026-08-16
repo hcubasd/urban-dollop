@@ -7,7 +7,7 @@ import pandas as pd
 from urban_dollop.synth.network_emissions import network_emissions
 
 _REQUIRED = {
-    "network_loads.csv": ("link_id", "time_interval", "vehicle", "forward", "vehicle_count", "velocity", "load_pct"),
+    "network_loads.csv": ("link_id", "time_interval", "resource", "vehicle", "forward", "vehicle_count", "velocity", "load_pct"),
     "network.gpkg": ("link_id", "grade"),
     "vehicles.csv": ("vehicle", "vehicle_type"),
     "copert_v_coefficients.csv": (
@@ -18,7 +18,7 @@ _REQUIRED = {
 }
 
 _OUTPUT_COLUMNS = [
-    "link_id", "time_interval", "vehicle", "forward", "pollutant", "source", "grams",
+    "link_id", "time_interval", "resource", "vehicle", "forward", "pollutant", "source", "grams",
 ]
 
 

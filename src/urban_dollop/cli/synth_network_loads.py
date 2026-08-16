@@ -8,19 +8,20 @@ from urban_dollop.synth.network_loads import network_loads
 
 _REQUIRED = {
     "network.gpkg": ("link_id", "grade", "road_type", "oneway"),
-    "desire_lines.gpkg": ("resource", "quantity", "origin_agent_id", "destination_zone_id"),
+    "desire_lines.gpkg": ("resource", "quantity", "origin_agent_id"),
     "departures.csv": ("resource", "time_interval", "probability"),
     "time_intervals.csv": ("time_interval", "duration"),
     "dwell_times.csv": ("resource", "dwell_time", "load_pct"),
     "vehicles.csv": ("vehicle", "bpr_alpha", "bpr_beta", "time_coefficient", "distance_coefficient", "pcu"),
     "vehicle_velocities.csv": ("vehicle", "road_type", "velocity"),
     "vehicle_capacities.csv": ("vehicle", "resource", "capacity"),
+    "consolidation_radii.csv": ("vehicle", "resource", "radius"),
     "road_capacities.csv": ("road_type", "capacity"),
     "alternative_specific_constants.csv": ("vehicle", "resource", "alternative_specific_constant"),
 }
 
 _OUTPUT_COLUMNS = [
-    "link_id", "time_interval", "vehicle", "forward", "vehicle_count", "velocity", "load_pct",
+    "link_id", "time_interval", "resource", "vehicle", "forward", "vehicle_count", "velocity", "load_pct",
 ]
 
 
@@ -65,6 +66,7 @@ def run(sigma=1.0, sigma_given=False):
         frames["vehicles.csv"].to_dict("records"),
         frames["vehicle_velocities.csv"].to_dict("records"),
         frames["vehicle_capacities.csv"].to_dict("records"),
+        frames["consolidation_radii.csv"].to_dict("records"),
         frames["road_capacities.csv"].to_dict("records"),
         frames["alternative_specific_constants.csv"].to_dict("records"),
     )

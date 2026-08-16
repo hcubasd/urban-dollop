@@ -15,16 +15,13 @@ def _resource_names(agent_rows):
 
 def desire_lines(agent_rows):
     """One row per resource transaction between two agents: resource,
-    quantity, origin_agent_id, destination_zone_id, and a 2-point geometry
-    from provider to consumer.
+    quantity, origin_agent_id, and a 2-point geometry from provider to
+    consumer.
 
-    origin_agent_id and destination_zone_id exist for network_loads'
-    consolidation step, which groups transactions into depot-to-zone
-    shipments so a vehicle can be filled with deliveries bound for the
-    same zone instead of running one near-empty trip per transaction.
-    Both come straight off the paired agent records during pairing -- no
-    spatial join against zones.gpkg needed downstream, since agents.gpkg
-    already carries zone_id as one of its stratum dimensions.
+    origin_agent_id identifies the depot for network_loads' consolidation
+    step. Consumer locations remain in each line's endpoint: network_loads
+    groups nearby destinations around a selected consumer rather than using
+    an administrative zone.
 
     For each resource independently, agents.gpkg already carries
     everything needed (capacity, need, location) -- no batch_sizes.csv,
@@ -67,8 +64,6 @@ def desire_lines(agent_rows):
         for row in agent_rows
     }
     points = {row["agent_id"]: row["geometry"] for row in agent_rows}
-    zones = {row["agent_id"]: row["zone_id"] for row in agent_rows}
-
     # The gravity term's length scale: the agent cloud's own bounding-box
     # diagonal, computed once. Cheap (one pass over the points already in
     # hand) and it keeps distance/scale bounded to roughly [0, 1] regardless
@@ -113,7 +108,6 @@ def desire_lines(agent_rows):
                 "resource": resource,
                 "quantity": quantity,
                 "origin_agent_id": provider_id,
-                "destination_zone_id": zones[consumer_id],
                 "geometry": LineString([points[provider_id].coords[0], points[consumer_id].coords[0]]),
             })
     return rows

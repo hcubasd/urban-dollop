@@ -121,6 +121,10 @@ def main():
         from urban_dollop.cli.synth_vehicle_capacities import run
 
         run(sigma, sigma_given)
+    elif command == ["synth", "consolidation-radii"]:
+        from urban_dollop.cli.synth_consolidation_radii import run
+
+        run(sigma, sigma_given)
     elif command == ["synth", "road-capacities"]:
         from urban_dollop.cli.synth_road_capacities import run
 

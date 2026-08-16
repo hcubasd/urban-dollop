@@ -103,20 +103,15 @@ def _route(predecessors, source, target, arcs):
 
 
 def _consolidate(desire_line_rows):
-    """Group transactions into depot-to-zone shipments, keyed by
-    (resource, origin agent, destination zone).
+    """Group transactions into depot shipments, keyed by (resource, origin).
 
-    This is what stops one package becoming one van trip: every delivery
-    the same origin agent owes the same zone for the same resource is one
-    shipment, so a vehicle can be filled with deliveries that happen to
-    be going the same way. Each underlying transaction stays visible
-    inside the shipment as its own destination point and remaining
-    quantity, since which specific agents end up on a given run decides
-    where that run actually drives.
+    Each transaction retains its destination point and outstanding quantity.
+    A dispatched operation starts from one selected destination and bundles
+    nearby destinations using its selected vehicle's consolidation radius.
     """
     shipments = {}
     for row in desire_line_rows:
-        key = (row["resource"], row["origin_agent_id"], row["destination_zone_id"])
+        key = (row["resource"], row["origin_agent_id"])
         coords = list(row["geometry"].coords)
         if key not in shipments:
             shipments[key] = {
@@ -158,35 +153,33 @@ def _interval_targets(desire_line_rows, departure_rows, intervals):
     return targets
 
 
-def _select_destinations(shipment, budget):
-    """Which of a shipment's destinations ride along on this run, drawn
-    weighted by how much each still has outstanding, until either the
-    shipment empties or the interval's remaining budget for the resource
-    does. Returns the picks and their total, without depleting anything
-    -- a run that turns out to be unroutable must leave the shipment
-    exactly as it found it.
-    """
-    outstanding = {
-        index: destination["remaining"]
-        for index, destination in enumerate(shipment["destinations"])
-        if destination["remaining"] > 0
-    }
+def _select_destinations(shipment, seed_index, radius, budget):
+    """Take the seed and its nearest in-radius destinations up to budget."""
+    seed = shipment["destinations"][seed_index]
+    order = sorted(
+        (
+            (
+                (destination["point"][0] - seed["point"][0]) ** 2
+                + (destination["point"][1] - seed["point"][1]) ** 2,
+                index,
+            )
+            for index, destination in enumerate(shipment["destinations"])
+            if destination["remaining"] > 0
+            and (destination["point"][0] - seed["point"][0]) ** 2
+            + (destination["point"][1] - seed["point"][1]) ** 2 <= radius ** 2
+        ),
+        key=lambda item: (item[0], item[1]),
+    )
     picks = []
     taken = 0.0
-    while taken < budget and outstanding:
-        index = weighted_choice(list(outstanding), list(outstanding.values()))
-        amount = min(outstanding[index], budget - taken)
-        picks.append((shipment["destinations"][index], amount))
+    for _, index in order:
+        if taken >= budget:
+            break
+        destination = shipment["destinations"][index]
+        amount = min(destination["remaining"], budget - taken)
+        picks.append((destination, amount))
         taken += amount
-        del outstanding[index]
     return picks, taken
-
-
-def _centroid(points):
-    return (
-        sum(x for x, _ in points) / len(points),
-        sum(y for _, y in points) / len(points),
-    )
 
 
 def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
@@ -228,10 +221,11 @@ def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
 
 def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_rows,
                   dwell_time_rows, vehicle_rows, vehicle_velocity_rows,
-                  vehicle_capacity_rows, road_capacity_rows, asc_rows):
-    """One row per (link, time interval, vehicle, direction) the
-    simulation put traffic on: link_id, time_interval, vehicle, forward,
-    vehicle_count, velocity, load_pct.
+                  vehicle_capacity_rows, consolidation_radius_rows,
+                  road_capacity_rows, asc_rows):
+    """One row per (link, time interval, resource, vehicle, direction) the
+    simulation put traffic on: link_id, time_interval, resource, vehicle,
+    forward, vehicle_count, velocity, load_pct.
 
     A two-way link travelled both ways in one interval yields two rows,
     not one. Splitting rather than pre-summing keeps the grade's sign
@@ -249,20 +243,13 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
 
     Each interval, every resource departs the share of its total
     transacted flow that departures.csv assigns to that interval. Flow
-    leaves as shipments (see _consolidate): a weighted draw picks an
-    origin-agent/destination-zone pair, a second weighted draw picks which
-    of that pair's destinations ride along, and the run drives to their
-    centroid rather than to any one of them. Vehicles that have both an
-    ASC and a capacity for the resource bid for the run; those that can
-    actually reach the centroid are entered into a multinomial logit on
-    asc + time_coefficient * route time + distance_coefficient * route
-    distance, and one is drawn. Enough of that vehicle go out to carry the
-    flow, the last one part-loaded with whatever's left over. If no vehicle
-    can reach the centroid, that origin-agent/destination-zone pair is
-    dropped entirely rather than retried against a different draw of
-    destinations -- picking a different subset might well succeed, but
-    there's no non-arbitrary number of retries, and the pair is already
-    looking unreachable.
+    leaves as origin/resource shipments (see _consolidate): a weighted draw
+    selects an origin and then a seed destination. Vehicles with an ASC,
+    capacity, and consolidation radius for that resource bid for the seed
+    route. The selected vehicle's radius serves the seed first and then
+    nearest in-radius destinations, up to the interval budget; every
+    dispatched vehicle drives to the seed. If no vehicle can reach the
+    seed, only that seed transaction is discarded.
 
     Velocities are frozen for the duration of an interval and recomputed
     at the end of it from the loads that interval actually produced, so
@@ -302,6 +289,11 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
         (row["vehicle"], row["resource"]): row["capacity"]
         for row in vehicle_capacity_rows
         if row["vehicle"] in vehicles
+    }
+    radius = {
+        (row["vehicle"], row["resource"]): row["radius"]
+        for row in consolidation_radius_rows
+        if row["vehicle"] in vehicles and row["radius"] > 0
     }
     asc = {
         (row["vehicle"], row["resource"]): row["alternative_specific_constant"]
@@ -359,7 +351,10 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
 
         for resource in sorted({row["resource"] for row in desire_line_rows}):
             budget = targets.get((resource, interval), 0)
-            eligible = [v for v in vehicles if (v, resource) in asc and (v, resource) in capacity]
+            eligible = [
+                vehicle for vehicle in vehicles
+                if (vehicle, resource) in asc and (vehicle, resource) in capacity and (vehicle, resource) in radius
+            ]
             if not eligible:
                 continue
             while budget > 0:
@@ -373,13 +368,20 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
                     available,
                     [sum(d["remaining"] for d in s["destinations"]) for s in available],
                 )
-                picks, taken = _select_destinations(shipment, budget)
-                if taken <= 0:
-                    break
+                outstanding = [
+                    index for index, destination in enumerate(shipment["destinations"])
+                    if destination["remaining"] > 0
+                ]
+                seed_index = weighted_choice(
+                    outstanding,
+                    [shipment["destinations"][index]["remaining"] for index in outstanding],
+                )
+                seed = shipment["destinations"][seed_index]
 
                 source = kd_tree.query(shipment["origin"])[1]
-                target = kd_tree.query(_centroid([d["point"] for d, _ in picks]))[1]
+                target = kd_tree.query(seed["point"])[1]
                 if source == target:
+                    picks, taken = _select_destinations(shipment, seed_index, float("inf"), budget)
                     for destination, amount in picks:
                         destination["remaining"] -= amount
                     budget -= taken
@@ -403,15 +405,17 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
                     )
 
                 if not options:
-                    for destination in shipment["destinations"]:
-                        destination["remaining"] = 0.0
+                    seed["remaining"] = 0.0
                     continue
 
                 vehicle, route = _mnl_choice(options, utilities)
+                picks, taken = _select_destinations(shipment, seed_index, radius[(vehicle, resource)], budget)
+                if taken <= 0:
+                    seed["remaining"] = 0.0
+                    continue
                 per_vehicle = capacity[(vehicle, resource)]
                 if per_vehicle <= 0:
-                    for destination in shipment["destinations"]:
-                        destination["remaining"] = 0.0
+                    seed["remaining"] = 0.0
                     continue
 
                 dispatched = math.ceil(taken / per_vehicle)
@@ -434,7 +438,7 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
                 trip, duration, links_by_id, free_flow[trip["vehicle"]], vehicles[trip["vehicle"]], v_over_c
             )
             for (link_id, forward), velocity in touched.items():
-                entry = contributions[(link_id, forward, trip["vehicle"])]
+                entry = contributions[(link_id, forward, trip["resource"], trip["vehicle"])]
                 entry["count"] += 1
                 entry["velocity"] += velocity
                 entry["load_pct"] += trip["load_pct"]
@@ -456,11 +460,12 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
         active = still_active
 
         loads = defaultdict(float)
-        for (link_id, forward, vehicle), entry in contributions.items():
+        for (link_id, forward, resource, vehicle), entry in contributions.items():
             loads[link_id] += entry["count"] * vehicles[vehicle]["pcu"]
             output.append({
                 "link_id": link_id,
                 "time_interval": interval,
+                "resource": resource,
                 "vehicle": vehicle,
                 "forward": forward,
                 "vehicle_count": entry["count"],

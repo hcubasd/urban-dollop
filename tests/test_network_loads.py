@@ -3,7 +3,6 @@ import math
 from shapely.geometry import LineString
 
 from urban_dollop.synth.network_loads import (
-    _centroid,
     _consolidate,
     _interval_targets,
     _mnl_choice,
@@ -34,26 +33,25 @@ def test_mnl_choice_favours_higher_utility():
     assert counts["a"] > counts["b"] * 3
 
 
-def test_consolidate_groups_by_origin_agent_and_destination_zone():
+def test_consolidate_groups_by_origin_agent():
     rows = [
-        {"resource": "parcels", "quantity": 2, "origin_agent_id": 1, "destination_zone_id": 7,
+        {"resource": "parcels", "quantity": 2, "origin_agent_id": 1,
          "geometry": LineString([(0, 0), (1, 1)])},
-        {"resource": "parcels", "quantity": 3, "origin_agent_id": 1, "destination_zone_id": 7,
+        {"resource": "parcels", "quantity": 3, "origin_agent_id": 1,
          "geometry": LineString([(0, 0), (1, 2)])},
-        {"resource": "parcels", "quantity": 5, "origin_agent_id": 1, "destination_zone_id": 8,
+        {"resource": "parcels", "quantity": 5, "origin_agent_id": 1,
          "geometry": LineString([(0, 0), (4, 4)])},
     ]
     shipments = _consolidate(rows)
-    assert len(shipments) == 2
-    by_total = sorted(sum(d["remaining"] for d in s["destinations"]) for s in shipments)
-    assert by_total == [5, 5]
+    assert len(shipments) == 1
+    assert sum(d["remaining"] for d in shipments[0]["destinations"]) == 10
 
 
 def test_consolidate_keeps_resources_separate():
     rows = [
-        {"resource": "parcels", "quantity": 2, "origin_agent_id": 1, "destination_zone_id": 7,
+        {"resource": "parcels", "quantity": 2, "origin_agent_id": 1,
          "geometry": LineString([(0, 0), (1, 1)])},
-        {"resource": "grains", "quantity": 2, "origin_agent_id": 1, "destination_zone_id": 7,
+        {"resource": "grains", "quantity": 2, "origin_agent_id": 1,
          "geometry": LineString([(0, 0), (1, 1)])},
     ]
     assert len(_consolidate(rows)) == 2
@@ -61,7 +59,7 @@ def test_consolidate_keeps_resources_separate():
 
 def test_interval_targets_renormalize_over_defined_intervals_only():
     desire_lines = [
-        {"resource": "parcels", "quantity": 100, "origin_agent_id": 1, "destination_zone_id": 7,
+        {"resource": "parcels", "quantity": 100, "origin_agent_id": 1,
          "geometry": LineString([(0, 0), (1, 1)])},
     ]
     departures = [
@@ -76,7 +74,7 @@ def test_interval_targets_renormalize_over_defined_intervals_only():
 
 def test_select_destinations_stops_at_the_budget():
     shipment = {"destinations": [{"point": (1, 1), "remaining": 10}, {"point": (2, 2), "remaining": 10}]}
-    picks, taken = _select_destinations(shipment, 6)
+    picks, taken = _select_destinations(shipment, 0, 10, 6)
     assert taken == 6
     # nothing is depleted by selection alone
     assert sum(d["remaining"] for d in shipment["destinations"]) == 20
@@ -84,12 +82,21 @@ def test_select_destinations_stops_at_the_budget():
 
 def test_select_destinations_stops_when_shipment_empties():
     shipment = {"destinations": [{"point": (1, 1), "remaining": 4}]}
-    picks, taken = _select_destinations(shipment, 100)
+    picks, taken = _select_destinations(shipment, 0, 10, 100)
     assert taken == 4
 
 
-def test_centroid_of_several_points():
-    assert _centroid([(0.0, 0.0), (2.0, 4.0)]) == (1.0, 2.0)
+def test_select_destinations_uses_nearest_points_after_the_seed():
+    shipment = {
+        "destinations": [
+            {"point": (0, 0), "remaining": 1},
+            {"point": (2, 0), "remaining": 1},
+            {"point": (1, 0), "remaining": 1},
+        ]
+    }
+    picks, taken = _select_destinations(shipment, 0, 2, 2)
+    assert taken == 2
+    assert [destination["point"] for destination, _ in picks] == [(0, 0), (1, 0)]
 
 
 def _fixture():
@@ -103,7 +110,7 @@ def _fixture():
          "geometry": LineString([(1.0, 0.0), (2.0, 0.0)])},
     ]
     desire_lines = [
-        {"resource": "parcels", "quantity": 4, "origin_agent_id": 1, "destination_zone_id": 9,
+        {"resource": "parcels", "quantity": 4, "origin_agent_id": 1,
          "geometry": LineString([(0.0, 0.0), (2.0, 0.0)])},
     ]
     departures = [{"resource": "parcels", "time_interval": "day", "probability": 1.0}]
@@ -113,16 +120,18 @@ def _fixture():
                  "time_coefficient": -1.0, "distance_coefficient": -1.0, "pcu": 1.0}]
     vehicle_velocities = [{"vehicle": "van", "road_type": "road", "velocity": 1.0}]
     vehicle_capacities = [{"vehicle": "van", "resource": "parcels", "capacity": 4}]
+    consolidation_radii = [{"vehicle": "van", "resource": "parcels", "radius": 1.0}]
     road_capacities = [{"road_type": "road", "capacity": 10.0}]
     ascs = [{"vehicle": "van", "resource": "parcels", "alternative_specific_constant": 0.0}]
     return (network, desire_lines, departures, time_intervals, dwell_times, vehicles,
-            vehicle_velocities, vehicle_capacities, road_capacities, ascs)
+            vehicle_velocities, vehicle_capacities, consolidation_radii, road_capacities, ascs)
 
 
 def test_end_to_end_puts_traffic_on_both_links():
     rows = network_loads(*_fixture())
     assert {row["link_id"] for row in rows} == {0, 1}
     assert all(row["vehicle"] == "van" for row in rows)
+    assert all(row["resource"] == "parcels" for row in rows)
     assert all(row["time_interval"] == "day" for row in rows)
 
 
@@ -149,7 +158,7 @@ def test_opposing_traffic_in_one_interval_stays_on_separate_rows():
     # a second shipment running the corridor the other way, so both
     # directions of both links carry traffic in the same interval
     fixture[1] = list(fixture[1]) + [
-        {"resource": "parcels", "quantity": 4, "origin_agent_id": 2, "destination_zone_id": 10,
+        {"resource": "parcels", "quantity": 4, "origin_agent_id": 2,
          "geometry": LineString([(2.0, 0.0), (0.0, 0.0)])},
     ]
     rows = network_loads(*fixture)
@@ -188,7 +197,7 @@ def test_partial_last_vehicle_lowers_average_load():
 
 def test_links_without_road_capacity_are_dropped():
     fixture = list(_fixture())
-    fixture[8] = [{"road_type": "other", "capacity": 10.0}]
+    fixture[9] = [{"road_type": "other", "capacity": 10.0}]
     assert network_loads(*fixture) == []
 
 
@@ -200,7 +209,7 @@ def test_vehicle_without_velocity_for_the_road_cannot_serve_it():
 
 def test_vehicle_without_an_asc_never_bids():
     fixture = list(_fixture())
-    fixture[9] = [{"vehicle": "van", "resource": "grains", "alternative_specific_constant": 0.0}]
+    fixture[10] = [{"vehicle": "van", "resource": "grains", "alternative_specific_constant": 0.0}]
     assert network_loads(*fixture) == []
 
 
@@ -233,7 +242,7 @@ def test_congestion_slows_the_second_interval():
     fixture = list(_fixture())
     fixture[3] = [{"time_interval": "a", "duration": 100.0}, {"time_interval": "b", "duration": 100.0}]
     fixture[2] = [{"resource": "parcels", "time_interval": "a", "probability": 1.0}]
-    fixture[8] = [{"road_type": "road", "capacity": 1.0}]
+    fixture[9] = [{"road_type": "road", "capacity": 1.0}]
     rows = network_loads(*fixture)
     outbound = [row for row in rows if row["time_interval"] == "a"]
     returning = [row for row in rows if row["time_interval"] == "b"]
