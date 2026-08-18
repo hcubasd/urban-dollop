@@ -771,6 +771,12 @@ before returning; the return departs at the start of the first interval beginnin
 that, since every trip fires at an interval boundary, and is dropped if that falls past the
 end of the simulated period or if no return route exists.
 
+Completed interval rows are written to `network_loads.csv` incrementally rather than retained
+until the entire synthesis finishes. Shortest-path results are cached only within an interval
+and with a fixed bound; identical in-flight vehicles share one counted trip state. These limits
+preserve routing and load results while preventing memory use from growing with completed
+interval output, distinct origins, or identical dispatched vehicles.
+
 Like `synth agents` and `synth desire-lines`, this invents no shape, so `--sigma` throws
 unconditionally, and the command is a no-op once `network_loads.csv` already exists -- the
 draws here are genuinely random, so a re-run would silently produce a different assignment

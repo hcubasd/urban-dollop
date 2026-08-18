@@ -2,6 +2,7 @@ import math
 
 from shapely.geometry import LineString
 
+import urban_dollop.synth.network_loads as network_loads_module
 from urban_dollop.synth.network_loads import (
     _consolidate,
     _interval_targets,
@@ -184,6 +185,31 @@ def test_overflowing_capacity_dispatches_more_vehicles():
     assert max(row["vehicle_count"] for row in rows) == 4
     # three full vans and one at the remainder, which here divides evenly
     assert all(row["load_pct"] == 1.0 for row in rows)
+
+
+def test_identical_full_loads_move_as_one_trip_group(monkeypatch):
+    fixture = list(_fixture())
+    fixture[7] = [{"vehicle": "van", "resource": "parcels", "capacity": 1}]
+    calls = 0
+    original_advance = network_loads_module._advance
+
+    def count_calls(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_advance(*args, **kwargs)
+
+    monkeypatch.setattr(network_loads_module, "_advance", count_calls)
+    rows = network_loads(*fixture)
+    assert calls == 1
+    assert all(row["vehicle_count"] == 4 for row in rows)
+
+
+def test_interval_callback_receives_aggregated_rows_without_retention():
+    chunks = []
+    rows = network_loads(*_fixture(), on_interval=chunks.append)
+    assert rows == []
+    assert len(chunks) == 1
+    assert {row["link_id"] for row in chunks[0]} == {0, 1}
 
 
 def test_partial_last_vehicle_lowers_average_load():

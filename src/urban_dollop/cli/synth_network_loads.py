@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 
 import geopandas as gpd
 import pandas as pd
@@ -57,18 +58,40 @@ def run(sigma=1.0, sigma_given=False):
         print(e, file=sys.stderr)
         sys.exit(1)
 
-    rows = network_loads(
-        frames["network.gpkg"].to_dict("records"),
-        frames["desire_lines.gpkg"].to_dict("records"),
-        frames["departures.csv"].to_dict("records"),
-        frames["time_intervals.csv"].to_dict("records"),
-        frames["dwell_times.csv"].to_dict("records"),
-        frames["vehicles.csv"].to_dict("records"),
-        frames["vehicle_velocities.csv"].to_dict("records"),
-        frames["vehicle_capacities.csv"].to_dict("records"),
-        frames["consolidation_radii.csv"].to_dict("records"),
-        frames["road_capacities.csv"].to_dict("records"),
-        frames["alternative_specific_constants.csv"].to_dict("records"),
-    )
+    rows_by_path = {path: frame.to_dict("records") for path, frame in frames.items()}
+    del frames
 
-    pd.DataFrame(rows, columns=_OUTPUT_COLUMNS).to_csv("network_loads.csv", index=False)
+    descriptor, temporary_path = tempfile.mkstemp(prefix=".network_loads-", suffix=".csv", dir=".")
+    os.close(descriptor)
+    wrote_rows = False
+
+    def write_interval(rows):
+        nonlocal wrote_rows
+        if not rows:
+            return
+        pd.DataFrame(rows, columns=_OUTPUT_COLUMNS).to_csv(
+            temporary_path, mode="a", header=not wrote_rows, index=False
+        )
+        wrote_rows = True
+
+    try:
+        network_loads(
+            rows_by_path["network.gpkg"],
+            rows_by_path["desire_lines.gpkg"],
+            rows_by_path["departures.csv"],
+            rows_by_path["time_intervals.csv"],
+            rows_by_path["dwell_times.csv"],
+            rows_by_path["vehicles.csv"],
+            rows_by_path["vehicle_velocities.csv"],
+            rows_by_path["vehicle_capacities.csv"],
+            rows_by_path["consolidation_radii.csv"],
+            rows_by_path["road_capacities.csv"],
+            rows_by_path["alternative_specific_constants.csv"],
+            on_interval=write_interval,
+        )
+        if not wrote_rows:
+            pd.DataFrame(columns=_OUTPUT_COLUMNS).to_csv(temporary_path, index=False)
+        os.replace(temporary_path, "network_loads.csv")
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)

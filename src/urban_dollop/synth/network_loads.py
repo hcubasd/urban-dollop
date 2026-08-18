@@ -1,5 +1,5 @@
 import math
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 from scipy.sparse import lil_matrix
 from scipy.sparse.csgraph import dijkstra
@@ -8,6 +8,7 @@ from scipy.spatial import KDTree
 from urban_dollop.helpers.weighted_choice import weighted_choice
 
 _COORD_PRECISION = 10
+_MAX_CACHED_PATHS = 32
 
 
 def _velocity(free_flow, grade, forward, alpha, beta, v_over_c):
@@ -222,7 +223,7 @@ def _advance(trip, duration, links_by_id, free_flow, vehicle_params, v_over_c):
 def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_rows,
                   dwell_time_rows, vehicle_rows, vehicle_velocity_rows,
                   vehicle_capacity_rows, consolidation_radius_rows,
-                  road_capacity_rows, asc_rows):
+                  road_capacity_rows, asc_rows, on_interval=None):
     """One row per (link, time interval, resource, vehicle, direction) the
     simulation put traffic on: link_id, time_interval, resource, vehicle,
     forward, vehicle_count, velocity, load_pct.
@@ -257,6 +258,9 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
     on the state the network was in when the interval opened. Loads do not
     accumulate across intervals: a vehicle that has driven on is no longer
     on the link behind it.
+    If on_interval is provided, it receives each interval's completed,
+    already-aggregated output rows. This lets callers write those rows and
+    discard them while retaining only the state needed by later intervals.
     """
     road_capacity = {row["road_type"]: row["capacity"] for row in road_capacity_rows}
     links = []
@@ -327,15 +331,20 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
                 usable, len(node_coords), free_flow.get(vehicle, {}),
                 row["bpr_alpha"], row["bpr_beta"], v_over_c,
             )
-        shortest = {}
+        shortest = OrderedDict()
 
         def paths_from(vehicle, source):
-            if (vehicle, source) not in shortest:
+            key = (vehicle, source)
+            if key not in shortest:
                 graph, _ = graphs[vehicle]
-                shortest[(vehicle, source)] = dijkstra(
+                shortest[key] = dijkstra(
                     graph, directed=True, indices=source, return_predecessors=True
                 )
-            return shortest[(vehicle, source)]
+                if len(shortest) > _MAX_CACHED_PATHS:
+                    shortest.popitem(last=False)
+            else:
+                shortest.move_to_end(key)
+            return shortest[key]
 
         for pending in pending_returns.pop(position, []):
             distances, predecessors = paths_from(pending["vehicle"], pending["source"])
@@ -347,6 +356,7 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
                     "vehicle": pending["vehicle"], "route": route, "index": 0, "progress": 0.0,
                     "load_pct": pending["load_pct"], "resource": pending["resource"],
                     "source": pending["source"], "target": pending["target"], "returning": True,
+                    "count": pending["count"],
                 })
 
         for resource in sorted({row["resource"] for row in desire_line_rows}):
@@ -418,13 +428,19 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
                     seed["remaining"] = 0.0
                     continue
 
-                dispatched = math.ceil(taken / per_vehicle)
-                for unit in range(dispatched):
-                    carried = min(per_vehicle, taken - unit * per_vehicle)
+                full_count = int(taken // per_vehicle)
+                remainder = taken - full_count * per_vehicle
+                if full_count:
                     active.append({
                         "vehicle": vehicle, "route": list(route), "index": 0, "progress": 0.0,
-                        "load_pct": carried / per_vehicle, "resource": resource,
-                        "source": source, "target": target, "returning": False,
+                        "load_pct": 1.0, "resource": resource,
+                        "source": source, "target": target, "returning": False, "count": full_count,
+                    })
+                if remainder > 0:
+                    active.append({
+                        "vehicle": vehicle, "route": list(route), "index": 0, "progress": 0.0,
+                        "load_pct": remainder / per_vehicle, "resource": resource,
+                        "source": source, "target": target, "returning": False, "count": 1,
                     })
 
                 for destination, amount in picks:
@@ -439,9 +455,9 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
             )
             for (link_id, forward), velocity in touched.items():
                 entry = contributions[(link_id, forward, trip["resource"], trip["vehicle"])]
-                entry["count"] += 1
-                entry["velocity"] += velocity
-                entry["load_pct"] += trip["load_pct"]
+                entry["count"] += trip["count"]
+                entry["velocity"] += velocity * trip["count"]
+                entry["load_pct"] += trip["load_pct"] * trip["count"]
 
             if not arrived:
                 still_active.append(trip)
@@ -455,14 +471,15 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
             if departs is not None:
                 pending_returns[departs].append({
                     "vehicle": trip["vehicle"], "source": trip["target"], "target": trip["source"],
-                    "load_pct": return_load, "resource": trip["resource"],
+                    "load_pct": return_load, "resource": trip["resource"], "count": trip["count"],
                 })
         active = still_active
 
         loads = defaultdict(float)
+        interval_output = []
         for (link_id, forward, resource, vehicle), entry in contributions.items():
             loads[link_id] += entry["count"] * vehicles[vehicle]["pcu"]
-            output.append({
+            interval_output.append({
                 "link_id": link_id,
                 "time_interval": interval,
                 "resource": resource,
@@ -477,5 +494,10 @@ def network_loads(network_rows, desire_line_rows, departure_rows, time_interval_
         for link_id, load in loads.items():
             link_capacity = road_capacity[links_by_id[link_id]["road_type"]]
             v_over_c[link_id] = load / link_capacity if link_capacity > 0 else 0.0
+
+        if on_interval is None:
+            output.extend(interval_output)
+        else:
+            on_interval(interval_output)
 
     return output
