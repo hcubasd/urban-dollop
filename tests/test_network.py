@@ -1,3 +1,5 @@
+import pytest
+
 from urban_dollop.synth.network import _edges, network
 
 
@@ -50,7 +52,21 @@ def test_given_geometries_used_as_is_and_ignore_sigma_for_count():
     from shapely.geometry import LineString
 
     geometries = [LineString([(0.0, 0.0), (1.0, 1.0)]), LineString([(1.0, 1.0), (2.0, 0.0)])]
-    gdf = network(geometries=geometries, sigma=5.0)
+    gdf = network(geometries=geometries, sigma=5.0, crs="EPSG:4326")
     assert len(gdf) == 2
     assert list(gdf["geometry"]) == geometries
     assert gdf["link_id"].tolist() == [0, 1]
+    assert gdf.crs == "EPSG:4326"
+
+
+def test_given_geometries_requires_crs():
+    from shapely.geometry import LineString
+
+    geometries = [LineString([(0.0, 0.0), (1.0, 1.0)])]
+    with pytest.raises(ValueError):
+        network(geometries=geometries, sigma=1.0)
+
+
+def test_invented_geometry_gets_a_real_crs():
+    gdf = network(sigma=2.0)
+    assert gdf.crs is not None

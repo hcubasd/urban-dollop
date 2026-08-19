@@ -4,6 +4,7 @@ import sys
 import geopandas as gpd
 import pandas as pd
 
+from urban_dollop.helpers.require_km import require_km
 from urban_dollop.synth.network_emissions import network_emissions
 
 _REQUIRED = {
@@ -50,6 +51,11 @@ def run(sigma=1.0, sigma_given=False):
     try:
         for path, frame in frames.items():
             _validate(frame, path)
+        # COPERT's distance term is link length times vehicle count -- Eq.
+        # 8's N*M*e directly, per network_emissions.py's own docstring --
+        # so network.gpkg's geometry is measured here the same way
+        # synth_network_loads.py measures it, and needs the same guarantee.
+        frames["network.gpkg"] = require_km(frames["network.gpkg"], "network.gpkg")
     except ValueError as e:
         print(e, file=sys.stderr)
         sys.exit(1)

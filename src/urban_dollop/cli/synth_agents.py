@@ -1,6 +1,5 @@
 import os
 import sys
-import warnings
 
 import geopandas as gpd
 import pandas as pd
@@ -56,6 +55,14 @@ def run(sigma=1.0, sigma_given=False):
     capacities_rows = _read_rows("capacities.csv")
     needs_rows = _read_rows("needs.csv")
     zones_gdf = gpd.read_file("zones.gpkg")
+    if zones_gdf.crs is None:
+        print(
+            "zones.gpkg: no CRS set. Every geometry file has to carry a real CRS -- "
+            "there's no way to tell a file that's honestly already in km apart from "
+            "one that silently isn't, so this is rejected outright rather than guessed at.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     try:
         _validate_resource_level(capacities_rows, "capacities.csv")
@@ -69,10 +76,12 @@ def run(sigma=1.0, sigma_given=False):
 
     rows = agents(supply_rows, demand_rows, capacities_rows, needs_rows, zones_gdf)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=".*CRS.*")
-        if rows:
-            gdf = gpd.GeoDataFrame(rows, crs=None)
-        else:
-            gdf = gpd.GeoDataFrame(columns=["agent_id", "geometry"], crs=None)
-        gdf.to_file("agents.gpkg", driver="GPKG")
+    # Every agent's point was sampled inside a real zone polygon, so it's
+    # already in zones_gdf's own coordinate system -- inheriting that CRS
+    # here is a statement of fact, not a choice, the way EPSG:3857 would be
+    # if this were invented from nothing the way zones/network can be.
+    if rows:
+        gdf = gpd.GeoDataFrame(rows, crs=zones_gdf.crs)
+    else:
+        gdf = gpd.GeoDataFrame(columns=["agent_id", "geometry"], crs=zones_gdf.crs)
+    gdf.to_file("agents.gpkg", driver="GPKG")

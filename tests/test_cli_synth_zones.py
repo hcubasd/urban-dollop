@@ -11,7 +11,7 @@ def test_read_zones_none_if_absent(tmp_path):
 
 def test_read_zones_shape_only(tmp_path):
     path = tmp_path / "zones.gpkg"
-    gpd.GeoDataFrame({"zone_id": [1, 2, 3], "geometry": [None, None, None]}).to_file(str(path), driver="GPKG")
+    gpd.GeoDataFrame({"zone_id": [1, 2, 3], "geometry": [None, None, None]}, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     zone_ids, complete = read_zones(str(path))
     assert zone_ids == [1, 2, 3]
     assert complete is False
@@ -22,22 +22,29 @@ def test_read_zones_complete(tmp_path):
     gpd.GeoDataFrame({
         "zone_id": [1, 2],
         "geometry": [Point(0, 0), Point(1, 1)],
-    }).to_file(str(path), driver="GPKG")
+    }, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     zone_ids, complete = read_zones(str(path))
     assert zone_ids == [1, 2]
     assert complete is True
 
 
+def test_read_zones_missing_crs_rejected(tmp_path):
+    path = tmp_path / "bad.gpkg"
+    gpd.GeoDataFrame({"zone_id": [1], "geometry": [Point(0, 0)]}).to_file(str(path), driver="GPKG")
+    with pytest.raises(ValueError):
+        read_zones(str(path))
+
+
 def test_read_zones_missing_column_rejected(tmp_path):
     path = tmp_path / "bad.gpkg"
-    gpd.GeoDataFrame({"geometry": [None]}).to_file(str(path), driver="GPKG")
+    gpd.GeoDataFrame({"geometry": [None]}, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     with pytest.raises(ValueError):
         read_zones(str(path))
 
 
 def test_read_zones_duplicate_ids_rejected(tmp_path):
     path = tmp_path / "bad.gpkg"
-    gpd.GeoDataFrame({"zone_id": [1, 1], "geometry": [None, None]}).to_file(str(path), driver="GPKG")
+    gpd.GeoDataFrame({"zone_id": [1, 1], "geometry": [None, None]}, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     with pytest.raises(ValueError):
         read_zones(str(path))
 
@@ -47,7 +54,7 @@ def test_read_zones_mixed_geometry_rejected(tmp_path):
     gpd.GeoDataFrame({
         "zone_id": [1, 2],
         "geometry": [Point(0, 0), None],
-    }).to_file(str(path), driver="GPKG")
+    }, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     with pytest.raises(ValueError):
         read_zones(str(path))
 

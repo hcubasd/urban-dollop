@@ -30,16 +30,20 @@ def _edges(points):
     return sorted(edge_set)
 
 
-def network(geometries=None, sigma=1.0):
+def network(geometries=None, sigma=1.0, crs=None):
     """A GeoDataFrame of road links: link_id, grade, road_type, oneway,
     and a 2-point LineString. geometries=None means nothing exists yet --
     invent both the topology (points scattered over the unit square,
     connected by Delaunay triangulation once there are enough to
     triangulate -- below that, the two smaller cases in _edges are
-    handled directly) and the attributes. geometries given means the
-    shape is already decided -- attributes get synthesized for exactly
-    that geometry, in that order, ignoring sigma for the point/edge
-    count (there's nothing left for it to control).
+    handled directly) and the attributes -- and the output carries a
+    fixed EPSG:3857, since there is no real file to inherit a CRS from.
+    geometries given means the shape is already decided -- attributes
+    get synthesized for exactly that geometry, in that order, ignoring
+    sigma for the point/edge count (there's nothing left for it to
+    control) -- and crs is then required, the caller's own file's real
+    CRS carried straight through rather than replaced: this geometry
+    wasn't invented here, so it isn't this function's CRS to assign.
 
     random_count(sigma) is the only place --sigma acts, for the point
     count (invented-geometry case only) and the road_type vocabulary
@@ -68,6 +72,7 @@ def network(geometries=None, sigma=1.0):
 
     rows = []
     if geometries is None:
+        crs = 'EPSG:3857'
         n_points = random_count(sigma)
         points = [(random.uniform(0.0, 1.0), random.uniform(0.0, 1.0)) for _ in range(n_points)]
         for i, (a, b) in enumerate(_edges(points)):
@@ -82,6 +87,8 @@ def network(geometries=None, sigma=1.0):
                 "geometry": LineString([points[a], points[b]]),
             })
     else:
+        if crs is None:
+            raise ValueError("network(): crs is required when geometries is given -- see docstring")
         for i, geometry in enumerate(geometries):
             rows.append({
                 "link_id": i,
@@ -92,5 +99,5 @@ def network(geometries=None, sigma=1.0):
             })
 
     if not rows:
-        return gpd.GeoDataFrame(columns=_COLUMNS, crs=None)
-    return gpd.GeoDataFrame(rows, crs=None)
+        return gpd.GeoDataFrame(columns=_COLUMNS, crs=crs)
+    return gpd.GeoDataFrame(rows, crs=crs)

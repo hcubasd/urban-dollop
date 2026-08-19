@@ -50,4 +50,5 @@ def zones(zone_ids=None, sigma=1.0):
         point_region = vor.point_region[i]
         geom = _clip_voronoi_cell(vor, point_region, bounds)
         geometries.append(geom)
-    return gpd.GeoDataFrame({"zone_id": zone_ids, "geometry": geometries}, crs=None)
+    # From-scratch invention: no real file to inherit a CRS from.
+    return gpd.GeoDataFrame({"zone_id": zone_ids, "geometry": geometries}, crs='EPSG:3857')

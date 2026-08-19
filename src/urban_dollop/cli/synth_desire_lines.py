@@ -1,6 +1,5 @@
 import os
 import sys
-import warnings
 
 import geopandas as gpd
 import pandas as pd
@@ -49,7 +48,16 @@ def run(sigma=1.0, sigma_given=False):
         print("agents.gpkg: not ready yet -- synthesize it first", file=sys.stderr)
         sys.exit(1)
 
-    rows = gpd.read_file("agents.gpkg").to_dict("records")
+    agents_gdf = gpd.read_file("agents.gpkg")
+    if agents_gdf.crs is None:
+        print(
+            "agents.gpkg: no CRS set. Every geometry file has to carry a real CRS -- "
+            "there's no way to tell a file that's honestly already in km apart from "
+            "one that silently isn't, so this is rejected outright rather than guessed at.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    rows = agents_gdf.to_dict("records")
     try:
         _validate_zone_id(rows, "agents.gpkg")
         _validate_agents(rows, "agents.gpkg")
@@ -59,12 +67,13 @@ def run(sigma=1.0, sigma_given=False):
 
     lines = desire_lines(rows)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=".*CRS.*")
-        if lines:
-            gdf = gpd.GeoDataFrame(lines, crs=None)
-        else:
-            gdf = gpd.GeoDataFrame(
-                columns=["resource", "quantity", "origin_agent_id", "geometry"], crs=None
-            )
-        gdf.to_file("desire_lines.gpkg", driver="GPKG")
+    # Every line's two endpoints are real agent points, straight from
+    # agents_gdf -- inheriting its CRS is a statement of fact, the same
+    # reasoning as agents inheriting zones' CRS in cli/synth_agents.py.
+    if lines:
+        gdf = gpd.GeoDataFrame(lines, crs=agents_gdf.crs)
+    else:
+        gdf = gpd.GeoDataFrame(
+            columns=["resource", "quantity", "origin_agent_id", "geometry"], crs=agents_gdf.crs
+        )
+    gdf.to_file("desire_lines.gpkg", driver="GPKG")

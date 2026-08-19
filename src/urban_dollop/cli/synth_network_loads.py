@@ -5,6 +5,7 @@ import tempfile
 import geopandas as gpd
 import pandas as pd
 
+from urban_dollop.helpers.require_km import require_km
 from urban_dollop.synth.network_loads import network_loads
 
 _REQUIRED = {
@@ -54,6 +55,14 @@ def run(sigma=1.0, sigma_given=False):
     try:
         for path, frame in frames.items():
             _validate(frame, path)
+        # Both network.gpkg and desire_lines.gpkg have their coordinates
+        # measured here: a link's own length drives the whole distance/time
+        # simulation, and consolidation_radii compares raw point distances
+        # between desire-line endpoints. Both need to be genuinely in km,
+        # not merely assumed to be -- see require_km's own docstring for why
+        # this is a hard requirement rather than a best-effort conversion.
+        frames["network.gpkg"] = require_km(frames["network.gpkg"], "network.gpkg")
+        frames["desire_lines.gpkg"] = require_km(frames["desire_lines.gpkg"], "desire_lines.gpkg")
     except ValueError as e:
         print(e, file=sys.stderr)
         sys.exit(1)
@@ -91,6 +100,7 @@ def run(sigma=1.0, sigma_given=False):
         )
         if not wrote_rows:
             pd.DataFrame(columns=_OUTPUT_COLUMNS).to_csv(temporary_path, index=False)
+        os.chmod(temporary_path, 0o644)
         os.replace(temporary_path, "network_loads.csv")
     finally:
         if os.path.exists(temporary_path):

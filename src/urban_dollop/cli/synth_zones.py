@@ -1,6 +1,5 @@
 import os
 import sys
-import warnings
 
 import geopandas as gpd
 
@@ -11,14 +10,23 @@ from urban_dollop.synth.zones import zones
 def read_zones(path):
     """(zone_ids, geometry_complete) if `path` exists, else None -- None
     signals full synthesis. Raises ValueError if the file exists but
-    doesn't meet the leaf contract: 'zone_id' column present, zone_id
-    values distinct, and geometry either entirely empty or entirely
-    populated (never a mix, same "never guess/mix" contract as the
-    effects/thresholds files).
+    doesn't meet the leaf contract: a real CRS set (this file never uses
+    its own geometry numerically, but agent synthesis reads it right back
+    and samples real points inside it, so a missing CRS here is caught
+    here rather than surfacing one step later as a more confusing
+    failure), 'zone_id' column present, zone_id values distinct, and
+    geometry either entirely empty or entirely populated (never a mix,
+    same "never guess/mix" contract as the effects/thresholds files).
     """
     if not os.path.exists(path):
         return None
     gdf = gpd.read_file(path)
+    if gdf.crs is None:
+        raise ValueError(
+            f"{path}: no CRS set. Every geometry file has to carry a real CRS -- "
+            "there's no way to tell a file that's honestly already in km apart from "
+            "one that silently isn't, so this is rejected outright rather than guessed at."
+        )
     if "zone_id" not in gdf.columns:
         raise ValueError(f"{path}: missing 'zone_id' column")
     zone_ids = gdf["zone_id"].tolist()
@@ -50,7 +58,5 @@ def run(sigma=1.0, sigma_given=False):
     if not zones_need_synthesis(result):
         return
     zone_ids = result[0] if result is not None else None
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=".*CRS.*")
-        gdf = zones(zone_ids, sigma)
-        gdf.to_file("zones.gpkg", driver="GPKG")
+    gdf = zones(zone_ids, sigma)
+    gdf.to_file("zones.gpkg", driver="GPKG")

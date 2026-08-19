@@ -23,3 +23,8 @@ def test_pure_synthesis_geometry_always_populated():
     gdf = zones(sigma=1.5)
     assert gdf.geometry.notna().all()
     assert len(gdf) == len(gdf["zone_id"].unique())
+
+
+def test_invented_geometry_gets_a_real_crs():
+    gdf = zones(sigma=1.5)
+    assert gdf.crs is not None

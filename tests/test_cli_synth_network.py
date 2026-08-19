@@ -17,10 +17,11 @@ def test_read_network_shape_only(tmp_path):
         "road_type": [None, None],
         "oneway": [None, None],
         "geometry": geoms,
-    }).to_file(str(path), driver="GPKG")
-    geometries, complete = read_network(str(path))
+    }, crs="EPSG:4326").to_file(str(path), driver="GPKG")
+    geometries, complete, crs = read_network(str(path))
     assert len(geometries) == 2
     assert complete is False
+    assert crs is not None
 
 
 def test_read_network_complete(tmp_path):
@@ -31,14 +32,25 @@ def test_read_network_complete(tmp_path):
         "road_type": ["road_type_1"],
         "oneway": [True],
         "geometry": geoms,
-    }).to_file(str(path), driver="GPKG")
-    geometries, complete = read_network(str(path))
+    }, crs="EPSG:4326").to_file(str(path), driver="GPKG")
+    geometries, complete, crs = read_network(str(path))
     assert complete is True
+    assert crs is not None
+
+
+def test_read_network_missing_crs_rejected(tmp_path):
+    path = tmp_path / "bad.gpkg"
+    gpd.GeoDataFrame({
+        "grade": [1.5], "road_type": ["road_type_1"], "oneway": [True],
+        "geometry": [LineString([(0.0, 0.0), (1.0, 1.0)])],
+    }).to_file(str(path), driver="GPKG")
+    with pytest.raises(ValueError):
+        read_network(str(path))
 
 
 def test_read_network_missing_column_rejected(tmp_path):
     path = tmp_path / "bad.gpkg"
-    gpd.GeoDataFrame({"geometry": [LineString([(0.0, 0.0), (1.0, 1.0)])]}).to_file(str(path), driver="GPKG")
+    gpd.GeoDataFrame({"geometry": [LineString([(0.0, 0.0), (1.0, 1.0)])]}, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     with pytest.raises(ValueError):
         read_network(str(path))
 
@@ -50,7 +62,7 @@ def test_read_network_missing_geometry_rejected(tmp_path):
         "road_type": [None],
         "oneway": [None],
         "geometry": [None],
-    }).to_file(str(path), driver="GPKG")
+    }, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     with pytest.raises(ValueError):
         read_network(str(path))
 
@@ -62,7 +74,7 @@ def test_read_network_mixed_attributes_rejected(tmp_path):
         "road_type": [None, None],
         "oneway": [None, None],
         "geometry": [LineString([(0.0, 0.0), (1.0, 1.0)]), LineString([(1.0, 1.0), (2.0, 0.0)])],
-    }).to_file(str(path), driver="GPKG")
+    }, crs="EPSG:4326").to_file(str(path), driver="GPKG")
     with pytest.raises(ValueError):
         read_network(str(path))
 
